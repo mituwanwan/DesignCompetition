@@ -1,0 +1,43 @@
+项目目录结构约定
+nursing_home/
+├── app.py                 # 入口文件
+├── config.py              # 配置文件
+├── requirements.txt       # 依赖清单
+├── init_database.sql      # 数据库初始化脚本
+├── instance/              # SQLite数据库文件存放目录
+├── uploads/               # 上传文件存放目录
+│   └── incidents/         # 异常情况图片
+├── static/                # 静态资源
+│   ├── css/
+│   ├── js/
+│   └── images/
+├── templates/             # HTML模板
+│   ├── base.html          # 基础模板
+│   ├── auth/              # 认证相关页面
+│   ├── admin/             # 管理端页面
+│   ├── caregiver/         # 护工端页面
+│   └── family/            # 子女端页面
+└── api/                   # API接口
+    ├── __init__.py
+    ├── auth.py
+    ├── elders.py
+    ├── care_records.py
+    ├── tasks.py
+    ├── users.py
+    ├── alarms.py
+    ├── stats.py
+    └── messages.py
+
+
+前端路由约定
+登录页：/login
+管理员首页：/admin
+护工首页：/caregiver
+子女首页：/family
+
+
+
+常量定义约定
+自动报警阈值：血压 > 140/90、心率 > 100 或 < 60、连续 3 天睡眠 < 5 小时
+图片上传限制：最大 2MB，仅支持 jpg/png 格式
+会话超时时间：30 分钟
