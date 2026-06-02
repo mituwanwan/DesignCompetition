@@ -1,0 +1,882 @@
+{% extends "base.html" %}
+
+{% block title %}账号权限管理 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}账号权限管理{% endblock %}
+
+{% block sidebar %}
+    <a href="/admin"><i class="bi bi-house-door me-2"></i> 首页数据看板</a>
+    <a href="/admin/elders"><i class="bi bi-people me-2"></i> 老人信息管理</a>
+    <a href="/admin/users" class="active"><i class="bi bi-person-badge me-2"></i> 账号权限管理</a>
+    <a href="/admin/alarms"><i class="bi bi-exclamation-triangle me-2"></i> 异常报警中心</a>
+    <a href="/admin/visits"><i class="bi bi-calendar-check me-2"></i> 探视预约管理</a>
+    <a href="/admin/messages"><i class="bi bi-chat-left-text me-2"></i> 消息管理</a>
+    <a href="/admin/family-messages"><i class="bi bi-chat-heart me-2"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag me-2"></i> 异常上报管理</a>
+    <a href="/admin/reports"><i class="bi bi-bar-chart me-2"></i>数据统计分析</a>
+    <a href="/admin/logs" class="nav-link"><i class="bi bi-journal-text me-2"></i> 系统日志</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-action-btn { padding: 0.25rem 0.5rem; font-size: var(--fs-sm); }
+    .nav-pills .nav-link.active { background-color: var(--primary); }
+    .elder-card { transition: all var(--transition-normal); }
+    .elder-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .assigned { border-left: 4px solid var(--success); background-color: var(--success-soft); }
+    .not-assigned { border-left: 4px solid var(--border-light); }
+    .status-badge { font-size: var(--fs-xs); padding: 0.25rem 0.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 标签页导航 -->
+    <ul class="nav nav-pills mb-4" id="userTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="accounts-tab" data-bs-toggle="pill" data-bs-target="#accounts" type="button">账号管理</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="locked-tab" data-bs-toggle="pill" data-bs-target="#locked" type="button">
+                锁定账号
+                <span class="badge bg-danger ms-1" id="lockedCount">0</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="assign-tab" data-bs-toggle="pill" data-bs-target="#assign" type="button">护工分配</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="login-logs-tab" data-bs-toggle="pill" data-bs-target="#login-logs" type="button">登录日志</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="userTabsContent">
+        <!-- 账号管理 -->
+        <div class="tab-pane fade show active" id="accounts" role="tabpanel">
+            <div class="row mb-3 align-items-center">
+                <div class="col-md-8">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <select class="form-select" id="filterRole">
+                                <option value="">全部角色</option>
+                                <option value="admin">管理员</option>
+                                <option value="caregiver">护工</option>
+                                <option value="family">子女</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="filterStatus">
+                                <option value="">全部状态</option>
+                                <option value="enabled">启用</option>
+                                <option value="disabled">禁用</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-primary w-100" id="searchBtn"><i class="bi bi-search"></i> 查询</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-primary" id="addUserBtn"><i class="bi bi-plus-lg"></i> 创建用户</button>
+                </div>
+            </div>
+
+            <div class="table-responsive bg-white p-3 rounded shadow-sm">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>用户名</th>
+                            <th>姓名</th>
+                            <th>角色</th>
+                            <th>手机号</th>
+                            <th>邮箱</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>正在加载...</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="text-muted small" id="paginationInfo">第 1 页，共 1 页</div>
+                    <nav><ul class="pagination pagination-sm mb-0" id="paginationNav"></ul></nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- 锁定账号 -->
+        <div class="tab-pane fade" id="locked" role="tabpanel">
+            <div class="table-responsive bg-white p-3 rounded shadow-sm">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>用户名</th>
+                            <th>姓名</th>
+                            <th>角色</th>
+                            <th>失败次数</th>
+                            <th>锁定时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lockedTableBody">
+                        <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-check-circle fs-4 d-block mb-2"></i>暂无锁定账号</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 护工分配 -->
+        <div class="tab-pane fade" id="assign" role="tabpanel">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">选择护工</label>
+                    <select class="form-select" id="caregiverSelect">
+                        <option value="">请选择护工</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="assignContent" style="display: none;">
+                <h6 class="mb-3">已分配的老人</h6>
+                <div class="row mb-4" id="assignedEldersRow"></div>
+                
+                <hr>
+                
+                <h6 class="mb-3">所有老人（点击分配/取消分配）</h6>
+                <div class="row" id="allEldersRow"></div>
+            </div>
+            
+            <div id="assignEmpty" class="text-center text-muted py-5">
+                <i class="bi bi-person-circle fs-1 d-block mb-3"></i>
+                请先选择一位护工
+            </div>
+        </div>
+
+        <!-- 登录日志 -->
+        <div class="tab-pane fade" id="login-logs" role="tabpanel">
+            <div class="row mb-3 align-items-center">
+                <div class="col-md-8">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <select class="form-select" id="logStatusFilter">
+                                <option value="">全部状态</option>
+                                <option value="success">成功</option>
+                                <option value="failed">失败</option>
+                                <option value="locked">锁定</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="date" class="form-control" id="logStartDate">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="date" class="form-control" id="logEndDate">
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-primary w-100" id="logSearchBtn"><i class="bi bi-search"></i> 查询</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive bg-white p-3 rounded shadow-sm">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>时间</th>
+                            <th>用户名</th>
+                            <th>姓名</th>
+                            <th>状态</th>
+                            <th>IP地址</th>
+                            <th>失败原因</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody">
+                        <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>正在加载...</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="text-muted small" id="logPaginationInfo">第 1 页，共 1 页</div>
+                    <nav><ul class="pagination pagination-sm mb-0" id="logPaginationNav"></ul></nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 创建/编辑用户模态框 -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userModalTitle">创建用户</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <div class="mb-3" id="usernameField">
+                        <label class="form-label">用户名 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="f_username" maxlength="50">
+                        <div class="invalid-feedback">请输入用户名，2-50个字符</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">姓名 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="f_name">
+                        <div class="invalid-feedback">请输入姓名</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">角色 <span class="text-danger">*</span></label>
+                        <select class="form-select" id="f_role">
+                            <option value="">请选择</option>
+                            <option value="admin">管理员</option>
+                            <option value="caregiver">护工</option>
+                            <option value="family">子女</option>
+                        </select>
+                        <div class="invalid-feedback">请选择角色</div>
+                    </div>
+                    <div class="mb-3" id="passwordField">
+                        <label class="form-label">密码 <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="f_password">
+                        <div class="invalid-feedback">密码至少8位，需包含大小写字母和数字</div>
+                        <div class="form-text">至少8位，包含大小写字母和数字</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">手机号</label>
+                        <input type="text" class="form-control" id="f_phone" maxlength="20">
+                        <div class="invalid-feedback">请输入有效的手机号码，11位数字以1开头</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">邮箱</label>
+                        <input type="email" class="form-control" id="f_email">
+                        <div class="invalid-feedback">请输入有效的邮箱地址</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveUserBtn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 重置密码模态框 -->
+<div class="modal fade" id="resetPwdModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">重置密码</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>将重置用户 <strong id="resetPwdUser"></strong> 的密码</p>
+                <div class="mb-3">
+                    <label class="form-label">新密码 <span class="text-danger">*</span></label>
+                    <input type="password" class="form-control" id="resetNewPassword">
+                    <div class="form-text">至少8位，包含大小写字母和数字</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-warning" id="confirmResetBtn">确认重置</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 绑定老人模态框 -->
+<div class="modal fade" id="bindModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">绑定老人</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>为子女用户 <strong id="bindUserName"></strong> 绑定老人</p>
+                <div class="mb-3">
+                    <label class="form-label">选择老人 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="bindElderSelect"></select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">已绑定的老人</label>
+                    <ul class="list-group" id="boundEldersList"><li class="list-group-item text-muted">暂无</li></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="confirmBindBtn">确认绑定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 锁定账号模态框 -->
+<div class="modal fade" id="lockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-lock me-2"></i>锁定账号</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要锁定用户 <strong id="lockUserName"></strong> 的账号吗？</p>
+                <div class="mb-3">
+                    <label class="form-label">锁定时长</label>
+                    <select class="form-select" id="lockDuration">
+                        <option value="10">10分钟</option>
+                        <option value="30">30分钟</option>
+                        <option value="60">1小时</option>
+                        <option value="1440">24小时</option>
+                        <option value="43200">30天</option>
+                    </select>
+                </div>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i> 锁定后该用户将无法登录系统，直到锁定时间到期或管理员手动解锁。
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirmLockBtn" onclick="confirmLock()">确认锁定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentPage = 1;
+    const pageSize = 20;
+    let editingId = null;
+    let bindFamilyId = null;
+    let selectedCaregiverId = null;
+    let currentLogPage = 1;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadUsers(1);
+        document.getElementById('searchBtn').addEventListener('click', function() { loadUsers(1); });
+        document.getElementById('addUserBtn').addEventListener('click', function() { openCreateModal(); });
+        document.getElementById('saveUserBtn').addEventListener('click', saveUser);
+        document.getElementById('confirmResetBtn').addEventListener('click', resetPassword);
+        document.getElementById('confirmBindBtn').addEventListener('click', bindElder);
+        document.getElementById('caregiverSelect').addEventListener('change', function() {
+            selectedCaregiverId = this.value ? parseInt(this.value) : null;
+            loadCaregiverAssignments();
+        });
+        document.getElementById('logSearchBtn').addEventListener('click', function() { loadLoginLogs(1); });
+
+        if (window.FormValidator) {
+            FormValidator.setupForm('#userForm', {
+                '#f_username': ['required', { rule: 'minLength', args: [2] }, { rule: 'maxLength', args: [50] }],
+                '#f_name': ['required'],
+                '#f_role': ['required'],
+                '#f_password': ['required', 'password'],
+                '#f_phone': ['phone'],
+                '#f_email': ['email']
+            });
+        }
+
+        const triggerTabList = document.querySelectorAll('#userTabs button');
+        triggerTabList.forEach(triggerEl => {
+            triggerEl.addEventListener('shown.bs.tab', function(e) {
+                if (e.target.id === 'locked-tab') loadLockedAccounts();
+                if (e.target.id === 'assign-tab') loadCaregiversForSelect();
+                if (e.target.id === 'login-logs-tab') loadLoginLogs(1);
+            });
+        });
+    });
+
+    function loadUsers(page) {
+        currentPage = page;
+        const role = document.getElementById('filterRole').value;
+        const status = document.getElementById('filterStatus').value;
+        let url = `/api/v1/users?page=${page}&page_size=${pageSize}`;
+        if (role) url += `&role=${role}`;
+        if (status) url += `&status=${status}`;
+        LoadingUtils.safeFetch(url).then(data => {
+            if (data.code === 200) {
+                const users = data.data.list || [];
+                const tbody = document.getElementById('usersTableBody');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-2"></i>暂无用户</td></tr>';
+                } else {
+                    const roleMap = {admin:'管理员', caregiver:'护工', family:'子女'};
+                    const statusMap = {enabled:'<span class="badge bg-success">启用</span>', disabled:'<span class="badge bg-secondary">禁用</span>'};
+                    tbody.innerHTML = users.map(u => {
+                        const isLocked = u.locked_until && new Date(u.locked_until) > new Date();
+                        const lockBadge = isLocked ? '<span class="badge bg-danger ms-1">已锁定</span>' : '';
+                        return `<tr${isLocked ? ' class="table-danger"' : ''}>
+                        <td>${u.username}</td>
+                        <td>${u.name}</td>
+                        <td>${roleMap[u.role] || u.role}</td>
+                        <td>${u.phone || '-'}</td>
+                        <td>${u.email || '-'}</td>
+                        <td>${statusMap[u.status] || u.status}${lockBadge}</td>
+                        <td>${u.created_at || '-'}</td>
+                        <td>
+                            <button class="btn btn-outline-primary table-action-btn" onclick="editUser(${u.id})" title="编辑"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-outline-warning table-action-btn" onclick="openResetPwd(${u.id}, '${u.name}')" title="重置密码"><i class="bi bi-key"></i></button>
+                            ${isLocked ?
+                                `<button class="btn btn-outline-success table-action-btn" onclick="toggleLockAccount(${u.id}, '${u.name}', false)" title="解锁账号"><i class="bi bi-unlock"></i></button>` :
+                                `<button class="btn btn-outline-danger table-action-btn" onclick="openLockModal(${u.id}, '${u.name}')" title="锁定账号"><i class="bi bi-lock"></i></button>`
+                            }
+                            ${u.role === 'family' ? `<button class="btn btn-outline-info table-action-btn" onclick="openBind(${u.id}, '${u.name}')" title="绑定老人"><i class="bi bi-link"></i></button>` : ''}
+                        </td>
+                    </tr>`;}).join('');
+                }
+                renderPagination(data.data.pagination);
+            }
+        }).catch(err => {
+            showToast(err.message || '加载用户列表失败，请重试', 'danger');
+        });
+    }
+
+    function renderPagination(p) {
+        document.getElementById('paginationInfo').textContent = `第 ${p.page} 页，共 ${p.total_pages} 页，总计 ${p.total} 条`;
+        let html = '';
+        if (p.page > 1) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page-1}">上一页</a></li>`;
+        for (let i = Math.max(1, p.page-2); i <= Math.min(p.total_pages, p.page+2); i++) {
+            html += `<li class="page-item ${i===p.page?'active':''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+        }
+        if (p.page < p.total_pages) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page+1}">下一页</a></li>`;
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav .page-link').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(this.dataset.page);
+                if (!isNaN(page)) loadUsers(page);
+            });
+        });
+    }
+
+    function openCreateModal() {
+        editingId = null;
+        document.getElementById('userModalTitle').textContent = '创建用户';
+        document.getElementById('userForm').reset();
+        if (window.FormValidator) FormValidator.resetForm('#userForm');
+        document.getElementById('usernameField').style.display = 'block';
+        document.getElementById('passwordField').style.display = 'block';
+        var modal = new bootstrap.Modal(document.getElementById('userModal'));
+        modal.show();
+        if (window.InteractionUtils) InteractionUtils.trackForm('#userForm');
+    }
+
+    function editUser(id) {
+        editingId = id;
+        document.getElementById('userModalTitle').textContent = '编辑用户';
+        document.getElementById('usernameField').style.display = 'none';
+        document.getElementById('passwordField').style.display = 'none';
+        LoadingUtils.safeFetch(`/api/v1/users?page=1&page_size=100`).then(data => {
+            if (data.code === 200) {
+                const user = (data.data.list || []).find(u => u.id === id);
+                if (user) {
+                    document.getElementById('f_name').value = user.name || '';
+                    document.getElementById('f_phone').value = user.phone || '';
+                    document.getElementById('f_email').value = user.email || '';
+                    document.getElementById('f_role').value = user.role || '';
+                    new bootstrap.Modal(document.getElementById('userModal')).show();
+                }
+            }
+        }).catch(err => {
+            showToast(err.message || '获取用户信息失败，请重试', 'danger');
+        });
+    }
+
+    function saveUser() {
+        if (editingId) {
+            const data = {
+                name: document.getElementById('f_name').value,
+                phone: document.getElementById('f_phone').value,
+                email: document.getElementById('f_email').value
+            };
+            if (!data.name) { showToast('姓名不能为空', 'warning'); return; }
+            if (data.phone && !/^1[0-9]{10}$/.test(data.phone)) { showToast('手机号格式不正确（11位数字，以1开头）', 'warning'); return; }
+            if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) { showToast('邮箱格式不正确', 'warning'); return; }
+            LoadingUtils.safeFetch(`/api/v1/users/${editingId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(d => {
+                if (d.code === 200) { showToast('更新成功', 'success'); bootstrap.Modal.getInstance(document.getElementById('userModal')).hide(); loadUsers(currentPage); }
+                else { showToast(d.msg, 'danger'); }
+            }).catch(err => {
+                showToast(err.message || '更新失败，请重试', 'danger');
+            });
+        } else {
+            const data = {
+                username: document.getElementById('f_username').value,
+                name: document.getElementById('f_name').value,
+                role: document.getElementById('f_role').value,
+                password: document.getElementById('f_password').value,
+                phone: document.getElementById('f_phone').value,
+                email: document.getElementById('f_email').value
+            };
+            if (!data.username || !data.name || !data.role || !data.password) { showToast('请填写所有必填项', 'warning'); return; }
+            if (data.password.length < 8) { showToast('密码至少需要8位', 'warning'); return; }
+            if (!/[a-z]/.test(data.password)) { showToast('密码必须包含小写字母', 'warning'); return; }
+            if (!/[A-Z]/.test(data.password)) { showToast('密码必须包含大写字母', 'warning'); return; }
+            if (!/[0-9]/.test(data.password)) { showToast('密码必须包含数字', 'warning'); return; }
+            if (data.phone && !/^1[0-9]{10}$/.test(data.phone)) { showToast('手机号格式不正确（11位数字，以1开头）', 'warning'); return; }
+            if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) { showToast('邮箱格式不正确', 'warning'); return; }
+            LoadingUtils.safeFetch('/api/v1/users', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(d => {
+                if (d.code === 200) { showToast('创建成功', 'success'); bootstrap.Modal.getInstance(document.getElementById('userModal')).hide(); loadUsers(1); }
+                else { showToast(d.msg, 'danger'); }
+            }).catch(err => {
+                showToast(err.message || '创建失败，请重试', 'danger');
+            });
+        }
+    }
+
+    function openResetPwd(id, name) {
+        document.getElementById('resetPwdUser').textContent = name;
+        document.getElementById('resetNewPassword').value = '';
+        document.getElementById('confirmResetBtn').dataset.id = id;
+        new bootstrap.Modal(document.getElementById('resetPwdModal')).show();
+    }
+
+    function resetPassword() {
+        const id = this.dataset.id;
+        const newPassword = document.getElementById('resetNewPassword').value;
+        if (!newPassword) { showToast('请输入新密码', 'warning'); return; }
+        LoadingUtils.safeFetch(`/api/v1/users/${id}/reset-password`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ new_password: newPassword })
+        }).then(d => {
+            if (d.code === 200) { showToast('密码重置成功', 'success'); bootstrap.Modal.getInstance(document.getElementById('resetPwdModal')).hide(); }
+            else { showToast(d.msg, 'danger'); }
+        }).catch(err => {
+            showToast(err.message || '密码重置失败，请重试', 'danger');
+        });
+    }
+
+    function openBind(familyId, name) {
+        bindFamilyId = familyId;
+        document.getElementById('bindUserName').textContent = name;
+        new bootstrap.Modal(document.getElementById('bindModal')).show();
+        loadEldersForBind();
+        loadBoundElders(familyId);
+    }
+
+    function loadEldersForBind() {
+        Promise.all([
+            LoadingUtils.safeFetch('/api/v1/elders'),
+            LoadingUtils.safeFetch(`/api/v1/users/${bindFamilyId}/bound-elders`)
+        ]).then(([eldersData, boundData]) => {
+            if (eldersData.code === 200 && boundData.code === 200) {
+                const allElders = eldersData.data.list || [];
+                const boundElders = boundData.data || [];
+                const boundIds = new Set(boundElders.map(e => e.id));
+                const availableElders = allElders.filter(e => !boundIds.has(e.id));
+                document.getElementById('bindElderSelect').innerHTML =
+                    '<option value="">请选择老人</option>' +
+                    availableElders.map(e => `<option value="${e.id}">${e.name} (${e.room_number}房)</option>`).join('');
+            }
+        }).catch(err => {
+            showToast(err.message || '加载老人列表失败，请重试', 'danger');
+        });
+    }
+
+    function loadBoundElders(familyId) {
+        LoadingUtils.safeFetch(`/api/v1/users/${familyId}/bound-elders`).then(data => {
+            if (data.code === 200) {
+                const boundElders = data.data || [];
+                const listEl = document.getElementById('boundEldersList');
+                if (boundElders.length === 0) {
+                    listEl.innerHTML = '<li class="list-group-item text-muted">暂无</li>';
+                } else {
+                    listEl.innerHTML = boundElders.map(e => `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-person me-2"></i>${e.name} (${e.room_number}房)</span>
+                            <button class="btn btn-sm btn-outline-danger" onclick="unbindElder(${e.id})">
+                                <i class="bi bi-unlink"></i> 解绑
+                            </button>
+                        </li>
+                    `).join('');
+                }
+            }
+        }).catch(err => {
+            showToast(err.message || '加载绑定信息失败，请重试', 'danger');
+        });
+    }
+
+    function bindElder() {
+        const elderId = document.getElementById('bindElderSelect').value;
+        if (!elderId) { showToast('请选择老人', 'warning'); return; }
+        LoadingUtils.safeFetch(`/api/v1/users/${bindFamilyId}/bind-elder`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ elder_id: parseInt(elderId) })
+        }).then(d => {
+            if (d.code === 200) {
+                showToast('绑定成功', 'success');
+                loadEldersForBind();
+                loadBoundElders(bindFamilyId);
+            }
+            else { showToast(d.msg, 'danger'); }
+        }).catch(err => {
+            showToast(err.message || '绑定失败，请重试', 'danger');
+        });
+    }
+
+    function unbindElder(elderId) {
+        if (!confirm('确定要解绑该老人吗？')) return;
+        LoadingUtils.safeFetch(`/api/v1/users/${bindFamilyId}/bind-elder/${elderId}`, {
+            method: 'DELETE'
+        }).then(d => {
+            if (d.code === 200) {
+                showToast('解绑成功', 'success');
+                loadEldersForBind();
+                loadBoundElders(bindFamilyId);
+            }
+            else { showToast(d.msg, 'danger'); }
+        }).catch(err => {
+            showToast(err.message || '解绑失败，请重试', 'danger');
+        });
+    }
+
+    function toggleLockAccount(id, name, lock) {
+        if (lock) {
+            openLockModal(id, name);
+            return;
+        }
+        if (!confirm(`确定要解锁用户 ${name} 吗？`)) return;
+        LoadingUtils.safeFetch(`/api/v1/users/${id}/unlock`, { method: 'PUT' }).then(d => {
+            if (d.code === 200) {
+                showToast('账号已解锁', 'success');
+                loadUsers(currentPage);
+            } else {
+                showToast(d.msg, 'danger');
+            }
+        }).catch(err => {
+            showToast(err.message || '操作失败，请重试', 'danger');
+        });
+    }
+
+    let lockUserId = null;
+    function openLockModal(id, name) {
+        lockUserId = id;
+        document.getElementById('lockUserName').textContent = name;
+        document.getElementById('lockDuration').value = '10';
+        new bootstrap.Modal(document.getElementById('lockModal')).show();
+    }
+
+    function confirmLock() {
+        if (!lockUserId) return;
+        const duration = document.getElementById('lockDuration').value;
+        LoadingUtils.safeFetch(`/api/v1/users/${lockUserId}/lock`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ duration_minutes: parseInt(duration) })
+        }).then(d => {
+            if (d.code === 200) {
+                showToast(d.msg, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('lockModal')).hide();
+                loadUsers(currentPage);
+            } else {
+                showToast(d.msg, 'danger');
+            }
+        }).catch(err => {
+            showToast(err.message || '锁定失败', 'danger');
+        });
+    }
+
+    function loadLockedAccounts() {
+        LoadingUtils.safeFetch('/api/v1/users/locked').then(data => {
+            if (data.code === 200) {
+                const users = data.data || [];
+                document.getElementById('lockedCount').textContent = users.length;
+                const tbody = document.getElementById('lockedTableBody');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-check-circle fs-4 d-block mb-2"></i>暂无锁定账号</td></tr>';
+                } else {
+                    const roleMap = {admin:'管理员', caregiver:'护工', family:'子女'};
+                    tbody.innerHTML = users.map(u => `<tr>
+                        <td>${u.username}</td>
+                        <td>${u.name}</td>
+                        <td>${roleMap[u.role] || u.role}</td>
+                        <td><span class="badge bg-danger">${u.login_failed_count}</span></td>
+                        <td>${u.locked_until || '-'}</td>
+                        <td>
+                            <button class="btn btn-outline-success table-action-btn" onclick="toggleLockAccount(${u.id}, '${u.name}', false)" title="解锁账号">
+                                <i class="bi bi-unlock"></i> 解锁
+                            </button>
+                        </td>
+                    </tr>`).join('');
+                }
+            }
+        }).catch(err => {
+            showToast(err.message || '加载锁定账号失败，请重试', 'danger');
+        });
+    }
+
+    function loadCaregiversForSelect() {
+        LoadingUtils.safeFetch('/api/v1/users?role=caregiver&page=1&page_size=100').then(data => {
+            if (data.code === 200) {
+                const caregivers = data.data.list || [];
+                const select = document.getElementById('caregiverSelect');
+                select.innerHTML = '<option value="">请选择护工</option>' +
+                    caregivers.map(c => `<option value="${c.id}">${c.name} (${c.username})</option>`).join('');
+            }
+        }).catch(err => {
+            showToast(err.message || '加载护工列表失败，请重试', 'danger');
+        });
+    }
+
+    function loadCaregiverAssignments() {
+        if (!selectedCaregiverId) {
+            document.getElementById('assignContent').style.display = 'none';
+            document.getElementById('assignEmpty').style.display = 'block';
+            return;
+        }
+
+        document.getElementById('assignContent').style.display = 'block';
+        document.getElementById('assignEmpty').style.display = 'none';
+
+        LoadingUtils.safeFetch(`/api/v1/users/${selectedCaregiverId}/all-elders-with-status`).then(data => {
+            if (data.code === 200) {
+                const elders = data.data || [];
+                const assigned = elders.filter(e => e.is_assigned);
+                const notAssigned = elders.filter(e => !e.is_assigned);
+
+                // 渲染已分配
+                const assignedRow = document.getElementById('assignedEldersRow');
+                if (assigned.length === 0) {
+                    assignedRow.innerHTML = '<div class="col-12 text-muted"><i class="bi bi-inbox me-2"></i>暂未分配老人</div>';
+                } else {
+                    assignedRow.innerHTML = assigned.map(e => renderElderCard(e, true)).join('');
+                }
+
+                // 渲染所有老人
+                const allRow = document.getElementById('allEldersRow');
+                if (elders.length === 0) {
+                    allRow.innerHTML = '<div class="col-12 text-muted"><i class="bi bi-inbox me-2"></i>暂无老人</div>';
+                } else {
+                    allRow.innerHTML = elders.map(e => renderElderCard(e, e.is_assigned)).join('');
+                }
+            }
+        }).catch(err => {
+            showToast(err.message || '加载分配信息失败，请重试', 'danger');
+        });
+    }
+
+    function renderElderCard(e, isAssigned) {
+        const genderText = e.gender === 'male' ? '男' : e.gender === 'female' ? '女' : '';
+        return `
+            <div class="col-md-3 mb-3 elder-card cursor-pointer ${isAssigned ? 'assigned' : 'not-assigned'}" onclick="toggleElderAssignment(${e.id}, ${isAssigned})">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="card-title mb-1">
+                            <i class="bi bi-person-circle me-1"></i>${e.name}
+                            ${isAssigned ? '<span class="badge bg-success ms-1">已分配</span>' : ''}
+                        </h6>
+                        <div class="small text-muted mb-2">
+                            ${genderText ? genderText + ' · ' : ''}${e.age}岁
+                        </div>
+                        <div class="small"><i class="bi bi-house me-1"></i>${e.room_number}房 ${e.bed_number}床</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function toggleElderAssignment(elderId, isAssigned) {
+        if (isAssigned) {
+            if (!confirm('确定要取消分配该老人吗？')) return;
+            LoadingUtils.safeFetch(`/api/v1/users/${selectedCaregiverId}/assign-elder/${elderId}`, {
+                method: 'DELETE'
+            }).then(d => {
+                if (d.code === 200) {
+                    showToast('已取消分配', 'success');
+                    loadCaregiverAssignments();
+                } else {
+                    showToast(d.msg, 'danger');
+                }
+            }).catch(err => {
+                showToast(err.message || '取消分配失败，请重试', 'danger');
+            });
+        } else {
+            LoadingUtils.safeFetch(`/api/v1/users/${selectedCaregiverId}/assign-elder`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ elder_id: elderId })
+            }).then(d => {
+                if (d.code === 200) {
+                    showToast('分配成功', 'success');
+                    loadCaregiverAssignments();
+                } else {
+                    showToast(d.msg, 'danger');
+                }
+            }).catch(err => {
+                showToast(err.message || '分配失败，请重试', 'danger');
+            });
+        }
+    }
+
+    function loadLoginLogs(page) {
+        currentLogPage = page;
+        const status = document.getElementById('logStatusFilter').value;
+        const startDate = document.getElementById('logStartDate').value;
+        const endDate = document.getElementById('logEndDate').value;
+        let url = `/api/v1/logs/login?page=${page}&limit=${pageSize}`;
+        if (status) url += `&status=${status}`;
+        if (startDate) url += `&start_time=${startDate}`;
+        if (endDate) url += `&end_time=${endDate}`;
+        LoadingUtils.safeFetch(url).then(data => {
+            if (data.code === 200) {
+                const logs = data.data.logs || [];
+                const tbody = document.getElementById('logsTableBody');
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-2"></i>暂无日志</td></tr>';
+                } else {
+                    const statusMap = {
+                        success: '<span class="badge bg-success">成功</span>',
+                        failed: '<span class="badge bg-warning text-dark">失败</span>',
+                        locked: '<span class="badge bg-danger">锁定</span>'
+                    };
+                    tbody.innerHTML = logs.map(l => `<tr>
+                        <td>${l.login_time || '-'}</td>
+                        <td>${l.username || '-'}</td>
+                        <td>${l.user_name || '-'}</td>
+                        <td>${statusMap[l.login_status] || l.login_status}</td>
+                        <td>${l.ip_address || '-'}</td>
+                        <td class="text-muted small">${l.failure_reason || '-'}</td>
+                    </tr>`).join('');
+                }
+                renderLogPagination(data.data);
+            }
+        }).catch(err => {
+            showToast(err.message || '加载登录日志失败，请重试', 'danger');
+        });
+    }
+
+    function renderLogPagination(data) {
+        const totalPages = Math.ceil(data.total / data.limit);
+        document.getElementById('logPaginationInfo').textContent = `第 ${data.page} 页，共 ${totalPages} 页，总计 ${data.total} 条`;
+        let html = '';
+        if (data.page > 1) html += `<li class="page-item"><a class="page-link" href="#" data-page="${data.page-1}">上一页</a></li>`;
+        for (let i = Math.max(1, data.page-2); i <= Math.min(totalPages, data.page+2); i++) {
+            html += `<li class="page-item ${i===data.page?'active':''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+        }
+        if (data.page < totalPages) html += `<li class="page-item"><a class="page-link" href="#" data-page="${data.page+1}">下一页</a></li>`;
+        document.getElementById('logPaginationNav').innerHTML = html;
+        document.querySelectorAll('#logPaginationNav .page-link').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(this.dataset.page);
+                if (!isNaN(page)) loadLoginLogs(page);
+            });
+        });
+    }
+
+</script>
+{% endblock %}

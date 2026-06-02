@@ -1,0 +1,858 @@
+{
+  "summary": {
+    "total": 85,
+    "passed": 85,
+    "failed": 0,
+    "pass_rate": 100.0,
+    "grade": "优秀",
+    "recommendation": "系统功能完整性良好，可以上线运行",
+    "start_time": "2026-05-02 17:29:36",
+    "end_time": "2026-05-02 17:29:36",
+    "duration_seconds": 0.616591
+  },
+  "modules": {
+    "服务器健康": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "认证模块": {
+      "total": 10,
+      "passed": 10,
+      "failed": 0
+    },
+    "管理员端": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0
+    },
+    "管理员端-页面": {
+      "total": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    "家属端": {
+      "total": 11,
+      "passed": 11,
+      "failed": 0
+    },
+    "家属端-权限": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "家属端-页面": {
+      "total": 7,
+      "passed": 7,
+      "failed": 0
+    },
+    "护工端": {
+      "total": 7,
+      "passed": 7,
+      "failed": 0
+    },
+    "护工端-权限": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "护工端-页面": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "通知系统": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0
+    },
+    "链接稳定性": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "边界条件": {
+      "total": 11,
+      "passed": 11,
+      "failed": 0
+    },
+    "边界条件-越权": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "边界条件-安全": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    }
+  },
+  "failed_tests": [],
+  "all_results": [
+    {
+      "module": "服务器健康",
+      "test_name": "服务器可访问性检查",
+      "method": "GET",
+      "url": "/login",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 11.9
+    },
+    {
+      "module": "服务器健康",
+      "test_name": "根路径重定向",
+      "method": "GET",
+      "url": "/",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 5.5
+    },
+    {
+      "module": "认证模块",
+      "test_name": "管理员登录 (admin/Admin@123)",
+      "method": "POST",
+      "url": "/api/v1/auth/login",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 5.8
+    },
+    {
+      "module": "认证模块",
+      "test_name": "家属登录 (family1/Family@123)",
+      "method": "POST",
+      "url": "/api/v1/auth/login",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 6.4
+    },
+    {
+      "module": "认证模块",
+      "test_name": "护工登录 (caregiver1/Caregiver@123)",
+      "method": "POST",
+      "url": "/api/v1/auth/login",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 6.4
+    },
+    {
+      "module": "认证模块",
+      "test_name": "未登录访问受保护API (GET /api/v1/users)",
+      "method": "GET",
+      "url": "/api/v1/users",
+      "status_code": 401,
+      "passed": true,
+      "duration_ms": 2.6
+    },
+    {
+      "module": "认证模块",
+      "test_name": "未登录访问管理员页面 (/admin)",
+      "method": "GET",
+      "url": "/admin",
+      "status_code": 401,
+      "passed": true,
+      "duration_ms": 2.3
+    },
+    {
+      "module": "认证模块",
+      "test_name": "错误密码登录",
+      "method": "POST",
+      "url": "/api/v1/auth/login",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 2.8
+    },
+    {
+      "module": "认证模块",
+      "test_name": "空用户名登录",
+      "method": "POST",
+      "url": "/api/v1/auth/login",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 2.4
+    },
+    {
+      "module": "认证模块",
+      "test_name": "空密码登录",
+      "method": "POST",
+      "url": "/api/v1/auth/login",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 2.5
+    },
+    {
+      "module": "认证模块",
+      "test_name": "不存在用户登录",
+      "method": "POST",
+      "url": "/api/v1/auth/login",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 2.8
+    },
+    {
+      "module": "认证模块",
+      "test_name": "管理员登出",
+      "method": "POST",
+      "url": "/api/v1/auth/logout",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.8
+    },
+    {
+      "module": "管理员端",
+      "test_name": "获取用户列表 GET /api/v1/users",
+      "method": "GET",
+      "url": "/api/v1/users",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 3.9
+    },
+    {
+      "module": "管理员端",
+      "test_name": "获取用户列表(带筛选) GET /api/v1/users?role=admin",
+      "method": "GET",
+      "url": "/api/v1/users?role=admin",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.0
+    },
+    {
+      "module": "管理员端",
+      "test_name": "获取老人列表 GET /api/v1/elders",
+      "method": "GET",
+      "url": "/api/v1/elders",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.2
+    },
+    {
+      "module": "管理员端",
+      "test_name": "获取报警列表 GET /api/v1/alarms",
+      "method": "GET",
+      "url": "/api/v1/alarms",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 5.4
+    },
+    {
+      "module": "管理员端",
+      "test_name": "获取探视预约 GET /api/v1/visits",
+      "method": "GET",
+      "url": "/api/v1/visits",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.5
+    },
+    {
+      "module": "管理员端",
+      "test_name": "获取消息列表 GET /api/v1/admin/messages",
+      "method": "GET",
+      "url": "/api/v1/admin/messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.7
+    },
+    {
+      "module": "管理员端",
+      "test_name": "获取通知列表 GET /api/v1/notifications",
+      "method": "GET",
+      "url": "/api/v1/notifications",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.4
+    },
+    {
+      "module": "管理员端",
+      "test_name": "批准预约 PUT /api/v1/visits/1/approve",
+      "method": "PUT",
+      "url": "/api/v1/visits/1/approve",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.2
+    },
+    {
+      "module": "管理员端-页面",
+      "test_name": "页面渲染: 管理员首页 (/admin)",
+      "method": "GET",
+      "url": "/admin",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 12.1
+    },
+    {
+      "module": "管理员端-页面",
+      "test_name": "页面渲染: 用户管理页 (/admin/users)",
+      "method": "GET",
+      "url": "/admin/users",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 11.0
+    },
+    {
+      "module": "管理员端-页面",
+      "test_name": "页面渲染: 老人信息页 (/admin/elders)",
+      "method": "GET",
+      "url": "/admin/elders",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 9.1
+    },
+    {
+      "module": "管理员端-页面",
+      "test_name": "页面渲染: 报警管理页 (/admin/alarms)",
+      "method": "GET",
+      "url": "/admin/alarms",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.0
+    },
+    {
+      "module": "管理员端-页面",
+      "test_name": "页面渲染: 探视预约页 (/admin/visits)",
+      "method": "GET",
+      "url": "/admin/visits",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.7
+    },
+    {
+      "module": "管理员端-页面",
+      "test_name": "页面渲染: 消息管理页 (/admin/messages)",
+      "method": "GET",
+      "url": "/admin/messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 31.5
+    },
+    {
+      "module": "家属端",
+      "test_name": "获取绑定老人列表 GET /api/v1/family/elders",
+      "method": "GET",
+      "url": "/api/v1/family/elders",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.8
+    },
+    {
+      "module": "家属端",
+      "test_name": "获取含消息老人列表 GET /api/v1/family/elders-with-messages",
+      "method": "GET",
+      "url": "/api/v1/family/elders-with-messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.6
+    },
+    {
+      "module": "家属端",
+      "test_name": "获取老人护工信息 GET /api/v1/family/elders/1/caregivers",
+      "method": "GET",
+      "url": "/api/v1/family/elders/1/caregivers",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 5.5
+    },
+    {
+      "module": "家属端",
+      "test_name": "获取留言列表 GET /api/v1/family/elders/1/messages",
+      "method": "GET",
+      "url": "/api/v1/family/elders/1/messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 6.2
+    },
+    {
+      "module": "家属端",
+      "test_name": "发送留言 POST /api/v1/family/messages",
+      "method": "POST",
+      "url": "/api/v1/family/messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.9
+    },
+    {
+      "module": "家属端",
+      "test_name": "获取报警列表 GET /api/v1/family/alarms",
+      "method": "GET",
+      "url": "/api/v1/family/alarms",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.4
+    },
+    {
+      "module": "家属端",
+      "test_name": "获取报警详情 GET /api/v1/family/alarms/5",
+      "method": "GET",
+      "url": "/api/v1/family/alarms/5",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.3
+    },
+    {
+      "module": "家属端",
+      "test_name": "获取未处理报警数 GET /api/v1/family/alarms/unhandled-count",
+      "method": "GET",
+      "url": "/api/v1/family/alarms/unhandled-count",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.5
+    },
+    {
+      "module": "家属端",
+      "test_name": "创建预约 POST /api/v1/visits",
+      "method": "POST",
+      "url": "/api/v1/visits",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.8
+    },
+    {
+      "module": "家属端",
+      "test_name": "取消预约 PUT /api/v1/visits/6/cancel",
+      "method": "PUT",
+      "url": "/api/v1/visits/6/cancel",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.7
+    },
+    {
+      "module": "家属端",
+      "test_name": "视频token验证(无效token) GET /api/v1/visits/video-token/invalid_token_test",
+      "method": "GET",
+      "url": "/api/v1/visits/video-token/invalid_token_test",
+      "status_code": 404,
+      "passed": true,
+      "duration_ms": 3.5
+    },
+    {
+      "module": "家属端-权限",
+      "test_name": "访问未绑定老人护工信息(elder_id=3)",
+      "method": "GET",
+      "url": "/api/v1/family/elders/3/caregivers",
+      "status_code": 403,
+      "passed": true,
+      "duration_ms": 4.1
+    },
+    {
+      "module": "家属端-权限",
+      "test_name": "访问未绑定老人留言(elder_id=3)",
+      "method": "GET",
+      "url": "/api/v1/family/elders/3/messages",
+      "status_code": 403,
+      "passed": true,
+      "duration_ms": 4.1
+    },
+    {
+      "module": "家属端-权限",
+      "test_name": "家属访问管理员接口 GET /api/v1/users (应403)",
+      "method": "GET",
+      "url": "/api/v1/users",
+      "status_code": 403,
+      "passed": true,
+      "duration_ms": 3.3
+    },
+    {
+      "module": "家属端-页面",
+      "test_name": "页面渲染: 家属首页 (/family)",
+      "method": "GET",
+      "url": "/family",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.7
+    },
+    {
+      "module": "家属端-页面",
+      "test_name": "页面渲染: 健康数据页 (/family/health)",
+      "method": "GET",
+      "url": "/family/health",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 9.7
+    },
+    {
+      "module": "家属端-页面",
+      "test_name": "页面渲染: 留言页 (/family/messages)",
+      "method": "GET",
+      "url": "/family/messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 9.8
+    },
+    {
+      "module": "家属端-页面",
+      "test_name": "页面渲染: 报警页 (/family/alarms)",
+      "method": "GET",
+      "url": "/family/alarms",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.9
+    },
+    {
+      "module": "家属端-页面",
+      "test_name": "页面渲染: 视频探视页 (/family/video-visit)",
+      "method": "GET",
+      "url": "/family/video-visit",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.0
+    },
+    {
+      "module": "家属端-页面",
+      "test_name": "页面渲染: 预约页 (/family/appointment)",
+      "method": "GET",
+      "url": "/family/appointment",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 7.6
+    },
+    {
+      "module": "家属端-页面",
+      "test_name": "视频房间页面 /family/video-room/test",
+      "method": "GET",
+      "url": "/family/video-room/test",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 5.0
+    },
+    {
+      "module": "护工端",
+      "test_name": "获取负责老人列表 GET /api/v1/caregiver/assigned-elders",
+      "method": "GET",
+      "url": "/api/v1/caregiver/assigned-elders",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.6
+    },
+    {
+      "module": "护工端",
+      "test_name": "获取含消息老人列表 GET /api/v1/caregiver/assigned-elders-with-messages",
+      "method": "GET",
+      "url": "/api/v1/caregiver/assigned-elders-with-messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.8
+    },
+    {
+      "module": "护工端",
+      "test_name": "获取老人消息 GET /api/v1/caregiver/messages/by-elder/1",
+      "method": "GET",
+      "url": "/api/v1/caregiver/messages/by-elder/1",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 6.3
+    },
+    {
+      "module": "护工端",
+      "test_name": "发送消息 POST /api/v1/caregiver/messages/send",
+      "method": "POST",
+      "url": "/api/v1/caregiver/messages/send",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 7.8
+    },
+    {
+      "module": "护工端",
+      "test_name": "获取未读消息数 GET /api/v1/caregiver/messages/unread-count",
+      "method": "GET",
+      "url": "/api/v1/caregiver/messages/unread-count",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.6
+    },
+    {
+      "module": "护工端",
+      "test_name": "获取任务列表 GET /api/v1/caregiver/my-tasks",
+      "method": "GET",
+      "url": "/api/v1/caregiver/my-tasks",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 5.0
+    },
+    {
+      "module": "护工端",
+      "test_name": "获取工作台摘要 GET /api/v1/caregiver/dashboard-summary",
+      "method": "GET",
+      "url": "/api/v1/caregiver/dashboard-summary",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.4
+    },
+    {
+      "module": "护工端-权限",
+      "test_name": "护工访问管理员接口 GET /api/v1/users (应403)",
+      "method": "GET",
+      "url": "/api/v1/users",
+      "status_code": 403,
+      "passed": true,
+      "duration_ms": 3.8
+    },
+    {
+      "module": "护工端-页面",
+      "test_name": "页面渲染: 护工首页 (/caregiver)",
+      "method": "GET",
+      "url": "/caregiver",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 11.6
+    },
+    {
+      "module": "护工端-页面",
+      "test_name": "页面渲染: 任务页 (/caregiver/tasks)",
+      "method": "GET",
+      "url": "/caregiver/tasks",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.3
+    },
+    {
+      "module": "护工端-页面",
+      "test_name": "页面渲染: 健康记录页 (/caregiver/health-records)",
+      "method": "GET",
+      "url": "/caregiver/health-records",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 10.3
+    },
+    {
+      "module": "护工端-页面",
+      "test_name": "页面渲染: 消息页 (/caregiver/messages)",
+      "method": "GET",
+      "url": "/caregiver/messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 7.9
+    },
+    {
+      "module": "通知系统",
+      "test_name": "管理员-获取未读通知数 GET /api/v1/notifications/unread-count",
+      "method": "GET",
+      "url": "/api/v1/notifications/unread-count",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.3
+    },
+    {
+      "module": "通知系统",
+      "test_name": "家属-获取未读通知数 GET /api/v1/notifications/unread-count",
+      "method": "GET",
+      "url": "/api/v1/notifications/unread-count",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.4
+    },
+    {
+      "module": "通知系统",
+      "test_name": "护工-获取未读通知数 GET /api/v1/notifications/unread-count",
+      "method": "GET",
+      "url": "/api/v1/notifications/unread-count",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 6.3
+    },
+    {
+      "module": "通知系统",
+      "test_name": "管理员-获取消息未读数 GET /api/v1/notifications/message-unread-count",
+      "method": "GET",
+      "url": "/api/v1/notifications/message-unread-count",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.4
+    },
+    {
+      "module": "通知系统",
+      "test_name": "家属-获取消息未读数 GET /api/v1/notifications/message-unread-count",
+      "method": "GET",
+      "url": "/api/v1/notifications/message-unread-count",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.2
+    },
+    {
+      "module": "通知系统",
+      "test_name": "护工-获取消息未读数 GET /api/v1/notifications/message-unread-count",
+      "method": "GET",
+      "url": "/api/v1/notifications/message-unread-count",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.8
+    },
+    {
+      "module": "通知系统",
+      "test_name": "获取通知列表 GET /api/v1/notifications?limit=5",
+      "method": "GET",
+      "url": "/api/v1/notifications?limit=5",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.7
+    },
+    {
+      "module": "通知系统",
+      "test_name": "标记所有通知已读 PUT /api/v1/notifications/mark-all-read",
+      "method": "PUT",
+      "url": "/api/v1/notifications/mark-all-read",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 5.9
+    },
+    {
+      "module": "链接稳定性",
+      "test_name": "连续10次请求测试 (成功10/10, 平均4ms)",
+      "method": "GET",
+      "url": "/api/v1/elders",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 3.8
+    },
+    {
+      "module": "链接稳定性",
+      "test_name": "并发5请求测试 (成功5/5, 平均5ms)",
+      "method": "GET",
+      "url": "/api/v1/elders",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 4.7
+    },
+    {
+      "module": "边界条件",
+      "test_name": "获取不存在的老人 GET /api/v1/elders/99999",
+      "method": "GET",
+      "url": "/api/v1/elders/99999",
+      "status_code": 404,
+      "passed": true,
+      "duration_ms": 3.6
+    },
+    {
+      "module": "边界条件",
+      "test_name": "获取不存在的报警 GET /api/v1/alarms/99999",
+      "method": "GET",
+      "url": "/api/v1/alarms/99999",
+      "status_code": 404,
+      "passed": true,
+      "duration_ms": 3.6
+    },
+    {
+      "module": "边界条件",
+      "test_name": "批准不存在的预约 PUT /api/v1/visits/99999/approve",
+      "method": "PUT",
+      "url": "/api/v1/visits/99999/approve",
+      "status_code": 404,
+      "passed": true,
+      "duration_ms": 4.1
+    },
+    {
+      "module": "边界条件",
+      "test_name": "无效分页参数 GET /api/v1/users?page=-1&page_size=0",
+      "method": "GET",
+      "url": "/api/v1/users?page=-1&page_size=0",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 3.4
+    },
+    {
+      "module": "边界条件",
+      "test_name": "无效角色筛选 GET /api/v1/users?role=invalid_role",
+      "method": "GET",
+      "url": "/api/v1/users?role=invalid_role",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 3.4
+    },
+    {
+      "module": "边界条件",
+      "test_name": "发送空留言 POST /api/v1/family/messages (空内容)",
+      "method": "POST",
+      "url": "/api/v1/family/messages",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 3.6
+    },
+    {
+      "module": "边界条件",
+      "test_name": "发送超长留言 POST /api/v1/family/messages (501字)",
+      "method": "POST",
+      "url": "/api/v1/family/messages",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 3.4
+    },
+    {
+      "module": "边界条件",
+      "test_name": "缺少elder_id创建预约 POST /api/v1/visits",
+      "method": "POST",
+      "url": "/api/v1/visits",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 3.3
+    },
+    {
+      "module": "边界条件",
+      "test_name": "无效预约类型 POST /api/v1/visits (type=invalid)",
+      "method": "POST",
+      "url": "/api/v1/visits",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 3.5
+    },
+    {
+      "module": "边界条件-越权",
+      "test_name": "家属访问管理员页面 /admin (应被拒绝)",
+      "method": "GET",
+      "url": "/admin",
+      "status_code": 403,
+      "passed": true,
+      "duration_ms": 3.3
+    },
+    {
+      "module": "边界条件-越权",
+      "test_name": "护工访问家属页面 /family (应被拒绝)",
+      "method": "GET",
+      "url": "/family",
+      "status_code": 403,
+      "passed": true,
+      "duration_ms": 3.3
+    },
+    {
+      "module": "边界条件-越权",
+      "test_name": "管理员访问护工API GET /api/v1/caregiver/assigned-elders (应403)",
+      "method": "GET",
+      "url": "/api/v1/caregiver/assigned-elders",
+      "status_code": 403,
+      "passed": true,
+      "duration_ms": 3.2
+    },
+    {
+      "module": "边界条件",
+      "test_name": "过去时间预约 POST /api/v1/visits",
+      "method": "POST",
+      "url": "/api/v1/visits",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 3.5
+    },
+    {
+      "module": "边界条件",
+      "test_name": "无效日期格式预约 POST /api/v1/visits",
+      "method": "POST",
+      "url": "/api/v1/visits",
+      "status_code": 400,
+      "passed": true,
+      "duration_ms": 3.3
+    },
+    {
+      "module": "边界条件-安全",
+      "test_name": "SQL注入测试 GET /api/v1/elders?name=' OR 1=1--",
+      "method": "GET",
+      "url": "/api/v1/elders?name=' OR 1=1--",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 3.9
+    },
+    {
+      "module": "边界条件-安全",
+      "test_name": "XSS内容留言 POST /api/v1/family/messages",
+      "method": "POST",
+      "url": "/api/v1/family/messages",
+      "status_code": 200,
+      "passed": true,
+      "duration_ms": 8.9
+    }
+  ]
+}

@@ -1,0 +1,613 @@
+{% extends "base.html" %}
+
+{% block title %}系统报警 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}系统报警{% endblock %}
+
+{% block sidebar %}
+    <a href="/family"><i class="bi bi-house-door"></i> 老人信息</a>
+    <a href="/family/health"><i class="bi bi-heart-pulse"></i> 健康数据</a>
+    <a href="/family/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/family/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/family/alarms" class="active"><i class="bi bi-exclamation-triangle"></i> 系统报警</a>
+    <a href="/family/video-visit"><i class="bi bi-camera-video"></i> 视频探视</a>
+    <a href="/family/appointment"><i class="bi bi-calendar-event"></i> 预约探望</a>
+{% endblock %}
+
+{% block content %}
+<style>
+    .alarm-stats { display: flex; gap: var(--space-md); margin-bottom: 20px; flex-wrap: wrap; }
+    .alarm-stat-card {
+        flex: 1; min-width: 140px; padding: var(--space-md) 20px; border-radius: var(--radius-md);
+        background: var(--bg-card); border: 1px solid var(--border-light); text-align: center;
+        transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .alarm-stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .alarm-stat-card .stat-num { font-size: var(--fs-4xl); font-weight: 700; line-height: 1.2; }
+    .alarm-stat-card .stat-label { font-size: var(--fs-sm); color: var(--text-secondary); margin-top: 4px; }
+    .alarm-stat-card.stat-total .stat-num { color: var(--primary); }
+    .alarm-stat-card.stat-unhandled .stat-num { color: var(--danger); }
+    .alarm-stat-card.stat-processing .stat-num { color: var(--warning); }
+    .alarm-stat-card.stat-resolved .stat-num { color: var(--success); }
+
+    .filter-bar {
+        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        margin-bottom: var(--space-md); padding: 12px var(--space-md); background: var(--bg-card);
+        border-radius: var(--radius-md); border: 1px solid var(--border-light);
+    }
+    .filter-bar select { max-width: 160px; }
+    .filter-bar .badge-count {
+        margin-left: auto; font-size: var(--fs-sm);
+    }
+
+    .alarm-card {
+        background: var(--bg-card); border-radius: var(--radius-md); padding: var(--space-md) 20px;
+        margin-bottom: 12px; border: 1px solid var(--border-light); cursor: pointer;
+        transition: all var(--transition-fast); position: relative;
+    }
+    .alarm-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+    .alarm-card.status-unhandled { border-left: 4px solid var(--danger); }
+    .alarm-card.status-processing { border-left: 4px solid var(--warning); }
+    .alarm-card.status-resolved { border-left: 4px solid var(--success); }
+    .alarm-card .alarm-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .alarm-card .alarm-type-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-weight: 500;
+    }
+    .alarm-card .alarm-type-badge.type-auto_health { background: var(--warning-soft); color: var(--warning-active); }
+    .alarm-card .alarm-type-badge.type-manual_incident { background: var(--danger-soft); color: var(--danger-active); }
+    .alarm-card .alarm-type-badge.type-other { background: var(--bg-hover); color: var(--text-secondary); }
+    .alarm-card .alarm-status {
+        padding: 4px 12px; border-radius: 20px; font-size: var(--fs-xs); font-weight: 600;
+    }
+    .alarm-card .alarm-status.status-unhandled { background: var(--danger-soft); color: var(--danger); }
+    .alarm-card .alarm-status.status-processing { background: var(--warning-soft); color: var(--warning-active); }
+    .alarm-card .alarm-status.status-resolved { background: var(--success-soft); color: var(--success); }
+    .alarm-card .alarm-elder { font-weight: 600; font-size: var(--fs-md); margin-top: 8px; }
+    .alarm-card .alarm-source { font-size: var(--fs-sm); color: var(--text-secondary); margin-top: 4px; }
+    .alarm-card .alarm-time { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 6px; }
+    .alarm-card .alarm-pulse {
+        position: absolute; top: 16px; right: 16px; width: 10px; height: 10px;
+        border-radius: 50%; background: var(--danger);
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(201,97,97,0.6); }
+        70% { box-shadow: 0 0 0 8px rgba(201,97,97,0); }
+        100% { box-shadow: 0 0 0 0 rgba(201,97,97,0); }
+    }
+
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before {
+        content: ''; position: absolute; left: 10px; top: 0; bottom: 0;
+        width: 2px; background: var(--border-light);
+    }
+    .timeline-item { position: relative; margin-bottom: var(--space-lg); }
+    .timeline-item:last-child { margin-bottom: 0; }
+    .timeline-dot {
+        position: absolute; left: -24px; top: 4px; width: 16px; height: 16px;
+        border-radius: 50%; border: 3px solid; background: var(--bg-card); z-index: 1;
+    }
+    .timeline-item.tl-trigger .timeline-dot { border-color: var(--danger); background: var(--danger); }
+    .timeline-item.tl-process .timeline-dot { border-color: var(--warning); background: var(--warning); }
+    .timeline-item.tl-resolve .timeline-dot { border-color: var(--success); background: var(--success); }
+    .timeline-item.tl-pending .timeline-dot { border-color: var(--border-light); background: var(--bg-hover); }
+    .timeline-item .tl-content {
+        background: var(--bg-hover); border-radius: var(--radius-md); padding: 12px var(--space-md);
+    }
+    .timeline-item .tl-title { font-weight: 600; font-size: var(--fs-base); }
+    .timeline-item .tl-time { font-size: var(--fs-xs); color: var(--text-secondary); margin-top: 2px; }
+    .timeline-item .tl-desc { font-size: var(--fs-sm); color: var(--text-primary); margin-top: 6px; }
+    .timeline-item .tl-duration {
+        display: inline-block; font-size: var(--fs-xs); color: var(--primary);
+        background: var(--primary-soft); padding: 2px 8px; border-radius: 10px; margin-top: 4px;
+    }
+
+    .alarm-alert-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5); z-index: 9999; display: none;
+        align-items: center; justify-content: center;
+    }
+    .alarm-alert-overlay.show { display: flex; }
+    .alarm-alert-box {
+        background: var(--bg-card); border-radius: var(--radius-xl); padding: var(--space-xl); max-width: 440px;
+        width: 90%; text-align: center; animation: alertPop 0.3s ease;
+        box-shadow: var(--shadow-2xl);
+    }
+    @keyframes alertPop {
+        0% { transform: scale(0.8); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    .alarm-alert-box .alert-icon {
+        width: 72px; height: 72px; border-radius: 50%; margin: 0 auto var(--space-md);
+        display: flex; align-items: center; justify-content: center;
+        background: var(--danger-soft); color: var(--danger); font-size: var(--fs-4xl);
+        animation: alertShake 0.5s ease 0.3s;
+    }
+    @keyframes alertShake {
+        0%, 100% { transform: rotate(0); }
+        20% { transform: rotate(-10deg); }
+        40% { transform: rotate(10deg); }
+        60% { transform: rotate(-5deg); }
+        80% { transform: rotate(5deg); }
+    }
+    .alarm-alert-box .alert-title { font-size: var(--fs-xl); font-weight: 700; color: var(--danger); }
+    .alarm-alert-box .alert-desc { font-size: var(--fs-base); color: var(--text-secondary); margin-top: 8px; }
+    .alarm-alert-box .alert-time { font-size: var(--fs-sm); color: var(--text-muted); margin-top: 6px; }
+    .alarm-alert-box .alert-btn {
+        margin-top: 20px; padding: 10px 32px; border-radius: 24px;
+        font-size: var(--fs-base); font-weight: 600;
+    }
+
+    .pagination-wrap { display: flex; justify-content: center; margin-top: 20px; }
+</style>
+
+<div class="container-fluid">
+    <div class="alarm-stats" id="alarmStats">
+        <div class="alarm-stat-card stat-total">
+            <div class="stat-num" id="statTotal">-</div>
+            <div class="stat-label">全部报警</div>
+        </div>
+        <div class="alarm-stat-card stat-unhandled">
+            <div class="stat-num" id="statUnhandled">-</div>
+            <div class="stat-label">未处理</div>
+        </div>
+        <div class="alarm-stat-card stat-processing">
+            <div class="stat-num" id="statProcessing">-</div>
+            <div class="stat-label">处理中</div>
+        </div>
+        <div class="alarm-stat-card stat-resolved">
+            <div class="stat-num" id="statResolved">-</div>
+            <div class="stat-label">已解决</div>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <select class="form-select form-select-sm" id="statusFilter">
+            <option value="">全部状态</option>
+            <option value="unhandled">未处理</option>
+            <option value="processing">处理中</option>
+            <option value="resolved">已解决</option>
+        </select>
+        <select class="form-select form-select-sm" id="elderFilter">
+            <option value="">全部老人</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" id="searchBtn">
+            <i class="bi bi-search"></i> 查询
+        </button>
+        <span class="badge-count text-muted" id="paginationInfo"></span>
+    </div>
+
+    <div id="alarmList">
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>加载中...
+        </div>
+    </div>
+
+    <div class="pagination-wrap">
+        <nav><ul class="pagination pagination-sm" id="paginationNav"></ul></nav>
+    </div>
+</div>
+
+<div class="modal fade" id="alarmDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>报警详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="alarmDetailContent"></div>
+        </div>
+    </div>
+</div>
+
+<div class="alarm-alert-overlay" id="alarmAlertOverlay">
+    <div class="alarm-alert-box">
+        <div class="alert-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+        <div class="alert-title" id="alertTitle">新报警通知</div>
+        <div class="alert-desc" id="alertDesc"></div>
+        <div class="alert-time" id="alertTime"></div>
+        <button class="btn btn-danger alert-btn" id="alertBtn" onclick="dismissAlarmAlert()">查看详情</button>
+    </div>
+</div>
+
+<audio id="alarmAudio" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkI2Hg3x1b2Vpe4eQlZONhX54cGhgYGl1gIuSlZKMhX54c2xkYWdwe4WOk5WRjIV+eHJsZWJnb3mEjJKUkY2Gf3pzbmhlZ29" type="audio/wav">
+</audio>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var currentPage = 1;
+    var pageSize = 15;
+    var lastAlarmIds = [];
+    var refreshTimer = null;
+    var pendingAlertAlarm = null;
+
+    var typeNames = {
+        'auto_health': '健康异常',
+        'manual_incident': '手动上报',
+        'other': '其他'
+    };
+    var typeIcons = {
+        'auto_health': 'bi-heart-pulse',
+        'manual_incident': 'bi-person-exclamation',
+        'other': 'bi-exclamation-circle'
+    };
+    var statusTexts = {
+        'unhandled': '未处理',
+        'processing': '处理中',
+        'resolved': '已解决'
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        requestNotificationPermission();
+        loadElderOptions();
+        loadAlarms(1);
+        startAutoRefresh();
+
+        document.getElementById('searchBtn').addEventListener('click', function() { loadAlarms(1); });
+        document.getElementById('statusFilter').addEventListener('change', function() { loadAlarms(1); });
+        document.getElementById('elderFilter').addEventListener('change', function() { loadAlarms(1); });
+    });
+
+    function requestNotificationPermission() {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    }
+
+    function startAutoRefresh() {
+        refreshTimer = setInterval(function() {
+            loadAlarms(currentPage, true);
+            checkNewAlarms();
+        }, 5000);
+    }
+
+    function loadElderOptions() {
+        LoadingUtils.safeFetch('/api/v1/family/elders').then(function(data) {
+            if (data.code === 200) {
+                var select = document.getElementById('elderFilter');
+                (data.data || []).forEach(function(elder) {
+                    var opt = document.createElement('option');
+                    opt.value = elder.id;
+                    opt.textContent = elder.name + ' (' + (elder.room_number || '') + '室)';
+                    select.appendChild(opt);
+                });
+            }
+        }).catch(function() {});
+    }
+
+    function loadAlarms(page, silent) {
+        currentPage = page;
+        var status = document.getElementById('statusFilter').value;
+        var elderId = document.getElementById('elderFilter').value;
+        var url = '/api/v1/family/alarms?page=' + page + '&page_size=' + pageSize;
+        if (status) url += '&status=' + status;
+        if (elderId) url += '&elder_id=' + elderId;
+
+        LoadingUtils.safeFetch(url).then(function(data) {
+            if (data.code === 200) {
+                renderAlarms(data.data.list || []);
+                renderPagination(data.data.pagination);
+                updateStats();
+            }
+        }).catch(function() {});
+    }
+
+    function updateStats() {
+        LoadingUtils.safeFetch('/api/v1/family/alarms?page=1&page_size=1').then(function(data) {
+            if (data.code === 200) {
+                if (window.NumberAnimation) {
+                    NumberAnimation.animateValue('statTotal', 0, data.data.pagination.total, { duration: 800 });
+                } else {
+                    document.getElementById('statTotal').textContent = data.data.pagination.total;
+                }
+            }
+        }).catch(function() {});
+
+        ['unhandled', 'processing', 'resolved'].forEach(function(status) {
+            LoadingUtils.safeFetch('/api/v1/family/alarms?page=1&page_size=1&status=' + status).then(function(data) {
+                if (data.code === 200) {
+                    var elId = status === 'unhandled' ? 'statUnhandled' :
+                               status === 'processing' ? 'statProcessing' : 'statResolved';
+                    if (window.NumberAnimation) {
+                        NumberAnimation.animateValue(elId, 0, data.data.pagination.total, { duration: 800 });
+                    } else {
+                        document.getElementById(elId).textContent = data.data.pagination.total;
+                    }
+                    if (window.AnomalyAlert && status === 'unhandled' && data.data.pagination.total > 0) {
+                        AnomalyAlert.highlightElement('#' + elId, { level: 'danger', pulse: true, icon: false });
+                    }
+                }
+            }).catch(function() {});
+        });
+
+        LoadingUtils.safeFetch('/api/v1/family/alarms/unhandled-count').then(function(data) {
+            if (data.code === 200) {
+                updateNavbarAlarmBadge(data.data.count);
+            }
+        }).catch(function() {});
+    }
+
+    function updateNavbarAlarmBadge(count) {
+        var badge = document.getElementById('alarmNavBadge');
+        if (!badge) return;
+        if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    function checkNewAlarms() {
+        LoadingUtils.safeFetch('/api/v1/family/alarms?page=1&page_size=5').then(function(data) {
+            if (data.code === 200) {
+                var alarms = data.data.list || [];
+                var currentIds = alarms.map(function(a) { return a.id; });
+                var newAlarms = alarms.filter(function(a) {
+                    return lastAlarmIds.indexOf(a.id) === -1 && a.status === 'unhandled';
+                });
+
+                if (lastAlarmIds.length > 0 && newAlarms.length > 0) {
+                    newAlarms.forEach(function(alarm) {
+                        triggerAlarmNotification(alarm);
+                    });
+                }
+
+                if (currentIds.length > 0) {
+                    lastAlarmIds = currentIds;
+                } else if (lastAlarmIds.length === 0) {
+                    lastAlarmIds = currentIds;
+                }
+            }
+        }).catch(function() {});
+    }
+
+    function triggerAlarmNotification(alarm) {
+        var title = '【报警】' + (alarm.elder_name || '老人');
+        var body = typeNames[alarm.type] || '系统报警';
+        if (alarm.trigger_source) body += ' - ' + alarm.trigger_source;
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+            var notification = new Notification(title, {
+                body: body,
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚠️</text></svg>',
+                tag: 'alarm-' + alarm.id,
+                requireInteraction: true
+            });
+            notification.onclick = function() {
+                window.focus();
+                notification.close();
+                viewAlarmDetail(alarm.id);
+            };
+            setTimeout(function() { notification.close(); }, 10000);
+        }
+
+        showAlarmAlert(alarm);
+        playAlarmSound();
+        showToast('收到新报警！' + (alarm.elder_name || ''), 'danger');
+    }
+
+    function showAlarmAlert(alarm) {
+        pendingAlertAlarm = alarm;
+        document.getElementById('alertTitle').textContent = '【' + (alarm.elder_name || '老人') + '】新报警';
+        document.getElementById('alertDesc').textContent = typeNames[alarm.type] || '系统报警';
+        var timeStr = alarm.triggered_at ? formatDateTime(alarm.triggered_at) : '';
+        document.getElementById('alertTime').textContent = timeStr;
+        document.getElementById('alarmAlertOverlay').classList.add('show');
+    }
+
+    function dismissAlarmAlert() {
+        document.getElementById('alarmAlertOverlay').classList.remove('show');
+        if (pendingAlertAlarm) {
+            viewAlarmDetail(pendingAlertAlarm.id);
+            pendingAlertAlarm = null;
+        }
+    }
+
+    function playAlarmSound() {
+        try {
+            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var oscillator = audioCtx.createOscillator();
+            var gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(660, audioCtx.currentTime + 0.15);
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.3);
+            oscillator.frequency.setValueAtTime(660, audioCtx.currentTime + 0.45);
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.7);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.7);
+        } catch (e) {}
+    }
+
+    function renderAlarms(alarms) {
+        var container = document.getElementById('alarmList');
+        if (!alarms || alarms.length === 0) {
+            container.innerHTML = '<div class="text-center py-5 text-muted">' +
+                '<i class="bi bi-shield-check fs-1 d-block mb-3" style="color:var(--border-light);"></i>' +
+                '<h6>暂无报警记录</h6>' +
+                '<p class="small">一切安好，请放心</p></div>';
+            return;
+        }
+
+        container.innerHTML = alarms.map(function(alarm) {
+            var statusClass = 'status-' + alarm.status;
+            var typeClass = 'type-' + alarm.type;
+            var typeIcon = typeIcons[alarm.type] || 'bi-exclamation-circle';
+            var pulseHtml = alarm.status === 'unhandled' ? '<div class="alarm-pulse"></div>' : '';
+
+            var sourceText = '';
+            if (alarm.type === 'auto_health' && alarm.trigger_source) {
+                sourceText = alarm.trigger_source;
+            } else if (alarm.type === 'manual_incident' && alarm.trigger_source) {
+                sourceText = '异常上报 #' + alarm.trigger_source;
+            } else if (alarm.trigger_note) {
+                sourceText = alarm.trigger_note;
+            }
+
+            return '<div class="alarm-card ' + statusClass + '" onclick="viewAlarmDetail(' + alarm.id + ')">' +
+                pulseHtml +
+                '<div class="alarm-header">' +
+                    '<span class="alarm-type-badge ' + typeClass + '"><i class="bi ' + typeIcon + '"></i> ' + (typeNames[alarm.type] || '其他') + '</span>' +
+                    '<span class="alarm-status ' + statusClass + '">' + (statusTexts[alarm.status] || '未知') + '</span>' +
+                '</div>' +
+                '<div class="alarm-elder"><i class="bi bi-person me-1"></i>' + escapeHtml(alarm.elder_name || '') + ' <small class="text-muted">' + (alarm.room_number || '') + '室</small></div>' +
+                (sourceText ? '<div class="alarm-source"><i class="bi bi-info-circle me-1"></i>' + escapeHtml(sourceText) + '</div>' : '') +
+                '<div class="alarm-time"><i class="bi bi-clock me-1"></i>' + formatDateTime(alarm.triggered_at) + '</div>' +
+            '</div>';
+        }).join('');
+
+        if (lastAlarmIds.length === 0) {
+            lastAlarmIds = alarms.map(function(a) { return a.id; });
+        }
+    }
+
+    function viewAlarmDetail(id) {
+        LoadingUtils.safeFetch('/api/v1/family/alarms/' + id).then(function(data) {
+            if (data.code === 200) {
+                renderAlarmDetail(data.data);
+                new bootstrap.Modal(document.getElementById('alarmDetailModal')).show();
+            } else {
+                showToast(data.msg || '获取详情失败', 'danger');
+            }
+        }).catch(function(err) {
+            showToast(err.message || '获取详情失败', 'danger');
+        });
+    }
+
+    function renderAlarmDetail(data) {
+        var alarm = data.alarm;
+        var logs = data.action_logs || [];
+        var statusClass = 'status-' + alarm.status;
+
+        var timelineHtml = '';
+
+        timelineHtml += '<div class="timeline-item tl-trigger">' +
+            '<div class="timeline-dot"></div>' +
+            '<div class="tl-content">' +
+                '<div class="tl-title"><i class="bi bi-bell me-1 text-danger"></i>报警触发</div>' +
+                '<div class="tl-time">' + formatDateTime(alarm.triggered_at) + '</div>' +
+                '<div class="tl-desc">' + (typeNames[alarm.type] || '系统报警') +
+                    (alarm.trigger_note ? ' — ' + escapeHtml(alarm.trigger_note) : '') + '</div>' +
+            '</div>' +
+        '</div>';
+
+        if (alarm.status === 'unhandled') {
+            timelineHtml += '<div class="timeline-item tl-pending">' +
+                '<div class="timeline-dot"></div>' +
+                '<div class="tl-content">' +
+                    '<div class="tl-title text-muted"><i class="bi bi-hourglass-split me-1"></i>等待处理</div>' +
+                    '<div class="tl-desc text-muted">工作人员尚未开始处理此报警</div>' +
+                '</div>' +
+            '</div>';
+        }
+
+        if (alarm.status === 'processing' || alarm.status === 'resolved') {
+            timelineHtml += '<div class="timeline-item tl-process">' +
+                '<div class="timeline-dot"></div>' +
+                '<div class="tl-content">' +
+                    '<div class="tl-title"><i class="bi bi-play-circle me-1 text-warning"></i>开始处理</div>' +
+                    '<div class="tl-time">' + formatDateTime(alarm.processing_at) + '</div>' +
+                    '<div class="tl-desc">处理人：' + escapeHtml(alarm.handler_name || '系统') + '</div>' +
+                    (alarm.response_duration ? '<div class="tl-duration"><i class="bi bi-speedometer2 me-1"></i>响应时长：' + alarm.response_duration + '</div>' : '') +
+                '</div>' +
+            '</div>';
+        }
+
+        if (alarm.status === 'resolved') {
+            timelineHtml += '<div class="timeline-item tl-resolve">' +
+                '<div class="timeline-dot"></div>' +
+                '<div class="tl-content">' +
+                    '<div class="tl-title"><i class="bi bi-check-circle me-1 text-success"></i>处理完成</div>' +
+                    '<div class="tl-time">' + formatDateTime(alarm.resolved_at) + '</div>' +
+                    (alarm.result ? '<div class="tl-desc">' + escapeHtml(alarm.result) + '</div>' : '') +
+                    (alarm.resolve_duration ? '<div class="tl-duration"><i class="bi bi-clock-history me-1"></i>处理时长：' + alarm.resolve_duration + '</div>' : '') +
+                '</div>' +
+            '</div>';
+        }
+
+        if (logs.length > 0) {
+            timelineHtml += '<hr class="my-3"><h6 class="fw-bold mb-3"><i class="bi bi-journal-text me-1"></i>处理日志</h6>';
+            logs.forEach(function(log) {
+                var actionIcon = log.action === 'process' ? 'bi-play-circle text-warning' : 'bi-check-circle text-success';
+                var actionText = log.action === 'process' ? '开始处理' : '处理完成';
+                timelineHtml += '<div class="timeline-item">' +
+                    '<div class="timeline-dot" style="border-color:var(--text-secondary);background:var(--text-secondary);"></div>' +
+                    '<div class="tl-content">' +
+                        '<div class="tl-title"><i class="bi ' + actionIcon + ' me-1"></i>' + actionText + '</div>' +
+                        '<div class="tl-time">' + escapeHtml(log.operator_name || '') + ' · ' + formatDateTime(log.created_at) + '</div>' +
+                        (log.note ? '<div class="tl-desc">' + escapeHtml(log.note) + '</div>' : '') +
+                    '</div>' +
+                '</div>';
+            });
+        }
+
+        var sourceText = '';
+        if (alarm.type === 'auto_health' && alarm.trigger_source) {
+            sourceText = alarm.trigger_source;
+        } else if (alarm.type === 'manual_incident' && alarm.trigger_source) {
+            sourceText = '异常上报 #' + alarm.trigger_source;
+        }
+
+        document.getElementById('alarmDetailContent').innerHTML =
+            '<div class="d-flex justify-content-between align-items-start mb-3">' +
+                '<div>' +
+                    '<h5 class="mb-1">' + escapeHtml(alarm.elder_name || '') + '</h5>' +
+                    '<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>' + (alarm.room_number || '') + '室</small>' +
+                '</div>' +
+                '<span class="alarm-status ' + statusClass + '" style="font-size:var(--fs-base);padding:6px 16px;">' + (statusTexts[alarm.status] || '未知') + '</span>' +
+            '</div>' +
+            '<div class="row mb-3">' +
+                '<div class="col-4"><div class="text-muted small">报警类型</div><div class="fw-bold">' + (typeNames[alarm.type] || '其他') + '</div></div>' +
+                '<div class="col-4"><div class="text-muted small">触发时间</div><div class="fw-bold">' + formatDateTime(alarm.triggered_at) + '</div></div>' +
+                '<div class="col-4"><div class="text-muted small">处理人</div><div class="fw-bold">' + escapeHtml(alarm.handler_name || '暂无') + '</div></div>' +
+            '</div>' +
+            (sourceText ? '<div class="mb-3"><div class="text-muted small">报警来源</div><div>' + escapeHtml(sourceText) + '</div></div>' : '') +
+            (alarm.trigger_note ? '<div class="mb-3"><div class="text-muted small">触发说明</div><div>' + escapeHtml(alarm.trigger_note) + '</div></div>' : '') +
+            '<hr>' +
+            '<h6 class="fw-bold mb-3"><i class="bi bi-list-nested me-1"></i>处理进度时间线</h6>' +
+            '<div class="timeline">' + timelineHtml + '</div>';
+    }
+
+    function renderPagination(pagination) {
+        document.getElementById('paginationInfo').textContent = '共 ' + pagination.total + ' 条';
+        var html = '';
+        if (pagination.page > 1) {
+            html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (pagination.page - 1) + '">上一页</a></li>';
+        }
+        for (var i = Math.max(1, pagination.page - 2); i <= Math.min(pagination.total_pages, pagination.page + 2); i++) {
+            html += '<li class="page-item ' + (i === pagination.page ? 'active' : '') + '">' +
+                '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+        }
+        if (pagination.page < pagination.total_pages) {
+            html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (pagination.page + 1) + '">下一页</a></li>';
+        }
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav a').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                var p = parseInt(this.dataset.page);
+                if (!isNaN(p)) loadAlarms(p);
+            });
+        });
+    }
+
+    function formatDateTime(dateStr) {
+        if (!dateStr) return '-';
+        var d = new Date(dateStr);
+        var pad = function(n) { return n < 10 ? '0' + n : n; };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+</script>
+{% endblock %}

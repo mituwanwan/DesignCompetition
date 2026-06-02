@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+
+{% block title %}异常上报 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}异常上报{% endblock %}
+
+{% block sidebar %}
+    <a href="/caregiver"><i class="bi bi-house-door"></i> 工作台</a>
+    <a href="/caregiver/tasks"><i class="bi bi-calendar-check"></i> 护理任务</a>
+    <a href="/caregiver/health-records"><i class="bi bi-heart-pulse"></i> 健康记录</a>
+    <a href="/caregiver/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/caregiver/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/caregiver/incident-reports" class="active"><i class="bi bi-exclamation-triangle"></i> 异常上报</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <ul class="nav nav-tabs mb-4" id="reportTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="report-tab" data-bs-toggle="tab" data-bs-target="#reportTab" type="button">
+                <i class="bi bi-plus-circle me-1"></i>上报异常
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#historyTab" type="button">
+                <i class="bi bi-clock-history me-1"></i>历史记录
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="reportTab">
+            <div class="row justify-content-center">
+                <div class="col-lg-7">
+                    <div class="card">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>提交异常报告</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="incidentForm">
+                                <div class="mb-3">
+                                    <label class="form-label">老人 <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="incidentElderId" required>
+                                        <option value="">请选择老人</option>
+                                    </select>
+                                    <div class="form-text">仅显示您负责照护的老人</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">异常类型 <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="incidentType" required>
+                                        <option value="">请选择类型</option>
+                                        <option value="fall">🤕 跌倒</option>
+                                        <option value="discomfort">🤒 身体不适</option>
+                                        <option value="agitation">😤 情绪烦躁</option>
+                                        <option value="other">📝 其他</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">备注 <span class="text-danger" id="noteRequiredStar" style="display:none">*</span></label>
+                                    <textarea class="form-control" id="incidentNote" rows="3" placeholder="请详细描述异常情况..."></textarea>
+                                    <div class="form-text text-danger" id="noteRequiredHint" style="display:none;">其他类型异常时备注为必填</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">现场图片</label>
+                                    <div class="text-muted small mb-2">仅支持 jpg/png 格式，单张不超过 2MB，最多 3 张</div>
+                                    <input type="file" class="form-control" id="incidentImages" accept="image/jpeg,image/jpg,image/png" multiple>
+                                    <div id="imageCountHint" class="form-text"></div>
+                                    <div id="imagePreviewContainer" class="mt-2 row g-2"></div>
+                                </div>
+                                <button type="button" class="btn btn-danger w-100" id="submitIncidentBtn">
+                                    <i class="bi bi-send me-1"></i>提交异常报告
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="historyTab">
+            <div class="card mb-3">
+                <div class="card-body py-2">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="historyType">
+                                <option value="">全部类型</option>
+                                <option value="fall">跌倒</option>
+                                <option value="discomfort">身体不适</option>
+                                <option value="agitation">情绪烦躁</option>
+                                <option value="other">其他</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" id="historyElder">
+                                <option value="">全部老人</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-sm btn-outline-primary w-100" id="historySearchBtn"><i class="bi bi-funnel me-1"></i>筛选</button>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <span class="text-muted small" id="historyPaginationInfo"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive bg-white p-3 rounded shadow-sm">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>老人</th>
+                            <th>异常类型</th>
+                            <th>备注</th>
+                            <th>图片</th>
+                            <th>报警状态</th>
+                            <th>上报时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr><td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>正在加载...
+                        </td></tr>
+                    </tbody>
+                </table>
+                <nav><ul class="pagination pagination-sm justify-content-center" id="historyPaginationNav"></ul></nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>异常上报详情</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailModalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let historyPage = 1;
+    const pageSize = 20;
+    let detailModal;
+    let selectedFiles = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
+        loadElders();
+        loadHistory(1);
+        loadHistoryElders();
+
+        document.getElementById('historySearchBtn').addEventListener('click', function() { loadHistory(1); });
+        document.getElementById('submitIncidentBtn').addEventListener('click', submitIncident);
+        document.getElementById('incidentType').addEventListener('change', function() {
+            var isOther = this.value === 'other';
+            document.getElementById('noteRequiredHint').style.display = isOther ? 'block' : 'none';
+            document.getElementById('noteRequiredStar').style.display = isOther ? 'inline' : 'none';
+        });
+        document.getElementById('incidentImages').addEventListener('change', handleImageSelect);
+
+        document.getElementById('history-tab').addEventListener('shown.bs.tab', function() {
+            loadHistory(1);
+        });
+
+        if (window.FormValidator) {
+            FormValidator.setupForm('#incidentForm', {
+                '#incidentElderId': ['required'],
+                '#incidentType': ['required'],
+                '#incidentSeverity': ['required'],
+                '#incidentDescription': ['required', { rule: 'minLength', args: [10] }]
+            });
+        }
+
+        if (window.InteractionUtils) {
+            InteractionUtils.trackForm('#incidentForm');
+        }
+    });
+
+    function loadElders() {
+        LoadingUtils.safeFetch('/api/v1/caregiver/assigned-elders').then(function(data) {
+            if (data.code === 200) {
+                var elders = data.data || [];
+                var sel = document.getElementById('incidentElderId');
+                sel.innerHTML = '<option value="">请选择老人</option>' +
+                    elders.map(function(e) {
+                        return '<option value="' + e.id + '">' + e.name + ' (' + e.room_number + '室)</option>';
+                    }).join('');
+            }
+        }).catch(function(err) {
+            showToast(err.message || '加载老人列表失败', 'danger');
+        });
+    }
+
+    function loadHistoryElders() {
+        LoadingUtils.safeFetch('/api/v1/caregiver/assigned-elders').then(function(data) {
+            if (data.code === 200) {
+                var elders = data.data || [];
+                var sel = document.getElementById('historyElder');
+                sel.innerHTML = '<option value="">全部老人</option>' +
+                    elders.map(function(e) {
+                        return '<option value="' + e.id + '">' + e.name + '</option>';
+                    }).join('');
+            }
+        }).catch(function() {});
+    }
+
+    function handleImageSelect(e) {
+        var files = e.target.files;
+        var countHint = document.getElementById('imageCountHint');
+        var previewContainer = document.getElementById('imagePreviewContainer');
+
+        var newFiles = [];
+        for (var i = 0; i < files.length; i++) {
+            var file = files[i];
+            if (!file.type.match(/image\/(jpeg|jpg|png)/)) {
+                showToast('仅支持 jpg/png 格式图片', 'warning');
+                continue;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+                showToast('图片 "' + file.name + '" 超过 2MB 限制', 'warning');
+                continue;
+            }
+            newFiles.push(file);
+        }
+
+        selectedFiles = selectedFiles.concat(newFiles);
+        if (selectedFiles.length > 3) {
+            selectedFiles = selectedFiles.slice(0, 3);
+            showToast('最多上传3张图片，已自动截取前3张', 'warning');
+        }
+
+        countHint.textContent = '已选择 ' + selectedFiles.length + ' / 3 张图片';
+        renderImagePreviews();
+    }
+
+    function renderImagePreviews() {
+        var previewContainer = document.getElementById('imagePreviewContainer');
+        previewContainer.innerHTML = '';
+
+        selectedFiles.forEach(function(file, index) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var col = document.createElement('div');
+                col.className = 'col-4';
+                col.innerHTML =
+                    '<div class="position-relative border rounded overflow-hidden">' +
+                        '<img src="' + e.target.result + '" class="img-fluid" style="height: 120px; width: 100%; object-fit: cover;">' +
+                        '<button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" onclick="removeImage(' + index + ')" title="删除">' +
+                            '<i class="bi bi-x-lg"></i>' +
+                        '</button>' +
+                        '<div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-50 text-white small p-1 text-truncate">' + file.name + '</div>' +
+                    '</div>';
+                previewContainer.appendChild(col);
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function removeImage(index) {
+        selectedFiles.splice(index, 1);
+        document.getElementById('imageCountHint').textContent = '已选择 ' + selectedFiles.length + ' / 3 张图片';
+        renderImagePreviews();
+
+        var dt = new DataTransfer();
+        selectedFiles.forEach(function(f) { dt.items.add(f); });
+        document.getElementById('incidentImages').files = dt.files;
+    }
+
+    function loadHistory(page) {
+        historyPage = page;
+        var type = document.getElementById('historyType').value;
+        var elderId = document.getElementById('historyElder').value;
+        var url = '/api/v1/incident-reports?page=' + page + '&page_size=' + pageSize;
+        if (type) url += '&type=' + encodeURIComponent(type);
+        if (elderId) url += '&elder_id=' + elderId;
+
+        LoadingUtils.safeFetch(url).then(function(data) {
+            if (data.code === 200) {
+                var list = data.data.list || [];
+                var tbody = document.getElementById('historyTableBody');
+                if (list.length === 0) {
+                    LoadingUtils.showEmpty(tbody, '暂无异常上报记录');
+                } else {
+                    var typeMap = {fall:'跌倒', discomfort:'身体不适', agitation:'情绪烦躁', other:'其他'};
+                    var typeBg = {fall:'bg-danger', discomfort:'bg-warning text-dark', agitation:'bg-info', other:'bg-secondary'};
+                    var alarmStatusMap = {unhandled:'未处理', processing:'处理中', resolved:'已解决'};
+                    var alarmStatusBg = {unhandled:'bg-danger', processing:'bg-warning text-dark', resolved:'bg-success'};
+
+                    tbody.innerHTML = list.map(function(r) {
+                        var alarmBadge = '-';
+                        if (r.alarm_id) {
+                            var aStatus = r.alarm_status || 'unhandled';
+                            alarmBadge = '<span class="badge ' + (alarmStatusBg[aStatus] || 'bg-secondary') + '">#' + r.alarm_id + ' ' + (alarmStatusMap[aStatus] || aStatus) + '</span>';
+                        }
+                        return '<tr>' +
+                            '<td><strong>' + r.elder_name + '</strong><br><small class="text-muted">' + (r.room_number || '-') + '室</small></td>' +
+                            '<td><span class="badge ' + (typeBg[r.type] || 'bg-secondary') + '">' + (typeMap[r.type] || r.type) + '</span></td>' +
+                            '<td style="max-width:200px"><span class="text-truncate d-inline-block" style="max-width:200px">' + (r.note || '-') + '</span></td>' +
+                            '<td>' + (r.images && r.images.length > 0 ? '<i class="bi bi-image text-primary me-1"></i>' + r.images.length + '张' : '-') + '</td>' +
+                            '<td>' + alarmBadge + '</td>' +
+                            '<td class="small">' + formatDateTime(r.created_at) + '</td>' +
+                            '<td><button class="btn btn-sm btn-outline-primary" onclick="showDetail(' + r.id + ')"><i class="bi bi-eye me-1"></i>查看</button></td>' +
+                        '</tr>';
+                    }).join('');
+                }
+                renderPagination(data.data.pagination);
+            }
+        }).catch(function(err) {
+            var container = document.getElementById('historyTableBody');
+            LoadingUtils.showError(container, err.message || '加载历史记录失败', function() { loadHistory(historyPage); });
+        });
+    }
+
+    function renderPagination(p) {
+        document.getElementById('historyPaginationInfo').textContent = '第 ' + p.page + ' 页，共 ' + p.total + ' 条';
+        var html = '';
+        if (p.page > 1) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page - 1) + '">上一页</a></li>';
+        for (var i = Math.max(1, p.page - 2); i <= Math.min(p.total_pages, p.page + 2); i++) {
+            html += '<li class="page-item ' + (i === p.page ? 'active' : '') + '"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+        }
+        if (p.page < p.total_pages) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page + 1) + '">下一页</a></li>';
+        document.getElementById('historyPaginationNav').innerHTML = html;
+        document.querySelectorAll('#historyPaginationNav .page-link').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                var page = parseInt(this.dataset.page);
+                if (!isNaN(page)) loadHistory(page);
+            });
+        });
+    }
+
+    function showDetail(reportId) {
+        var body = document.getElementById('detailModalBody');
+        body.innerHTML = '<div class="text-center py-3"><i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i><p class="text-muted">加载中...</p></div>';
+        detailModal.show();
+
+        LoadingUtils.safeFetch('/api/v1/incident-reports/' + reportId).then(function(data) {
+            if (data.code === 200) {
+                var r = data.data;
+                var typeMap = {fall:'跌倒', discomfort:'身体不适', agitation:'情绪烦躁', other:'其他'};
+                var typeBg = {fall:'bg-danger', discomfort:'bg-warning text-dark', agitation:'bg-info', other:'bg-secondary'};
+                var genderMap = {male:'男', female:'女'};
+                var statusMap = {unhandled:'未处理', processing:'处理中', resolved:'已解决'};
+                var statusBg = {unhandled:'bg-danger', processing:'bg-warning text-dark', resolved:'bg-success'};
+
+                var imagesHtml = '';
+                if (r.images && r.images.length > 0) {
+                    imagesHtml = '<div class="mb-3">' +
+                        '<h6 class="fw-bold"><i class="bi bi-image me-2"></i>现场照片</h6>' +
+                        '<div class="row g-2">' +
+                        r.images.map(function(img) {
+                            return '<div class="col-4"><a href="/' + img + '" target="_blank"><img src="/' + img + '" class="img-thumbnail" style="max-height: 150px; width: 100%; object-fit: cover;"></a></div>';
+                        }).join('') +
+                        '</div></div>';
+                }
+
+                var alarmHtml = '';
+                if (r.alarm) {
+                    var a = r.alarm;
+                    alarmHtml = '<div class="card border-warning mt-3">' +
+                        '<div class="card-header bg-warning text-dark"><h6 class="mb-0"><i class="bi bi-bell me-2"></i>关联报警 #' + a.id + '</h6></div>' +
+                        '<div class="card-body">' +
+                            '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                                '<tr><td class="text-muted">报警状态</td><td><span class="badge ' + (statusBg[a.status] || 'bg-secondary') + '">' + (statusMap[a.status] || a.status) + '</span></td></tr>' +
+                                '<tr><td class="text-muted">触发时间</td><td>' + formatDateTime(a.triggered_at) + '</td></tr>' +
+                                '<tr><td class="text-muted">触发说明</td><td>' + (a.trigger_note || '-') + '</td></tr>' +
+                                (a.handler_name ? '<tr><td class="text-muted">处理人</td><td>' + a.handler_name + '</td></tr>' : '') +
+                                (a.processing_at ? '<tr><td class="text-muted">开始处理</td><td>' + formatDateTime(a.processing_at) + '</td></tr>' : '') +
+                                (a.resolved_at ? '<tr><td class="text-muted">处理完成</td><td>' + formatDateTime(a.resolved_at) + '</td></tr>' : '') +
+                                (a.result ? '<tr><td class="text-muted">处理结果</td><td>' + a.result + '</td></tr>' : '') +
+                            '</table></div>' +
+                        '</div></div>';
+                }
+
+                body.innerHTML =
+                    '<div class="row">' +
+                        '<div class="col-md-7">' +
+                            '<div class="card mb-3">' +
+                                '<div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>异常信息</h6></div>' +
+                                '<div class="card-body">' +
+                                    '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                                        '<tr><td class="text-muted">异常类型</td><td><span class="badge ' + (typeBg[r.type] || 'bg-secondary') + ' fs-6">' + (typeMap[r.type] || r.type) + '</span></td></tr>' +
+                                        '<tr><td class="text-muted">详细描述</td><td>' + (r.note || '-') + '</td></tr>' +
+                                        '<tr><td class="text-muted">上报人</td><td><i class="bi bi-person me-1"></i>' + (r.caregiver_name || '-') + (r.caregiver_phone ? ' (' + r.caregiver_phone + ')' : '') + '</td></tr>' +
+                                        '<tr><td class="text-muted">上报时间</td><td><i class="bi bi-clock me-1"></i>' + formatDateTime(r.created_at) + '</td></tr>' +
+                                        '<tr><td class="text-muted">处理状态</td><td><span class="badge ' + (statusBg[r.status] || 'bg-secondary') + '">' + (statusMap[r.status] || r.status) + '</span></td></tr>' +
+                                    '</table></div>' +
+                                '</div>' +
+                            '</div>' +
+                            imagesHtml +
+                        '</div>' +
+                        '<div class="col-md-5">' +
+                            '<div class="card mb-3">' +
+                                '<div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-person-badge me-2"></i>老人信息</h6></div>' +
+                                '<div class="card-body">' +
+                                    '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                                        '<tr><td class="text-muted">姓名</td><td class="fw-bold">' + (r.elder_name || '-') + '</td></tr>' +
+                                        '<tr><td class="text-muted">性别/年龄</td><td>' + (genderMap[r.gender] || '-') + ' · ' + (r.age || '-') + '岁</td></tr>' +
+                                        '<tr><td class="text-muted">房间/床位</td><td>' + (r.room_number || '-') + '室 ' + (r.bed_number || '-') + '床</td></tr>' +
+                                    '</table></div>' +
+                                '</div>' +
+                            '</div>' +
+                            alarmHtml +
+                        '</div>' +
+                    '</div>';
+            } else {
+                body.innerHTML = '<div class="alert alert-danger">' + (data.msg || '获取详情失败') + '</div>';
+            }
+        }).catch(function(err) {
+            body.innerHTML = '<div class="alert alert-danger">' + (err.message || '获取详情失败') + '</div>';
+        });
+    }
+
+    function submitIncident() {
+        var elderId = document.getElementById('incidentElderId').value;
+        var type = document.getElementById('incidentType').value;
+        var note = document.getElementById('incidentNote').value.trim();
+
+        if (!elderId) { showToast('请选择老人', 'warning'); return; }
+        if (!type) { showToast('请选择异常类型', 'warning'); return; }
+        if (type === 'other' && !note) { showToast('其他类型异常时备注为必填', 'warning'); return; }
+        if (selectedFiles.length > 3) { showToast('图片最多上传3张', 'warning'); return; }
+
+        var formData = new FormData();
+        formData.append('elder_id', elderId);
+        formData.append('type', type);
+        formData.append('note', note);
+        for (var i = 0; i < selectedFiles.length; i++) {
+            formData.append('images', selectedFiles[i]);
+        }
+
+        var btn = document.getElementById('submitIncidentBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>提交中...';
+
+        LoadingUtils.safeFetch('/api/v1/incident-reports', {
+            method: 'POST',
+            body: formData
+        }).then(function(data) {
+            if (data.code === 200) {
+                showToast('异常上报成功！已自动生成报警 #' + data.data.alarm_id, 'success');
+                document.getElementById('incidentForm').reset();
+                selectedFiles = [];
+                document.getElementById('imageCountHint').textContent = '';
+                document.getElementById('imagePreviewContainer').innerHTML = '';
+                document.getElementById('noteRequiredHint').style.display = 'none';
+                document.getElementById('noteRequiredStar').style.display = 'none';
+                loadHistory(1);
+                document.getElementById('history-tab').click();
+            } else {
+                showToast(data.msg || '提交失败', 'danger');
+            }
+        }).catch(function(err) {
+            showToast(err.message || '操作失败，请重试', 'danger');
+        }).finally(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send me-1"></i>提交异常报告';
+        });
+    }
+
+    function formatDateTime(dateStr) {
+        if (!dateStr) return '-';
+        var d = new Date(dateStr);
+        return d.toLocaleString('zh-CN', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+        });
+    }
+</script>
+{% endblock %}

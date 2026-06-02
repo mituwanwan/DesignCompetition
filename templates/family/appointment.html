@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+
+{% block title %}预约探望 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}预约探望{% endblock %}
+
+{% block sidebar %}
+    <a href="/family"><i class="bi bi-house-door"></i> 老人信息</a>
+    <a href="/family/health"><i class="bi bi-heart-pulse"></i> 健康数据</a>
+    <a href="/family/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/family/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/family/alarms"><i class="bi bi-exclamation-triangle"></i> 系统报警 <span class="badge bg-danger sidebar-alarm-badge" id="alarmNavBadge" style="display:none">0</span></a>
+    <a href="/family/video-visit"><i class="bi bi-camera-video"></i> 视频探视</a>
+    <a href="/family/appointment" class="active"><i class="bi bi-calendar-event"></i> 预约探望</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 老人切换标签 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="mb-3"><i class="bi bi-people"></i> 已绑定老人</h6>
+                    <div class="btn-group w-100" role="group" id="elderTabs">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="contentArea">
+        <!-- 内容将动态加载 -->
+    </div>
+</div>
+
+<!-- 创建预约探望模态框 -->
+<div class="modal fade" id="apptModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">预约探望</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="apptForm">
+                    <div class="mb-3">
+                        <label class="form-label">老人 <span class="text-danger">*</span></label>
+                        <select class="form-select" id="aElderId" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">探望日期 <span class="text-danger">*</span></label>
+                        <input type="datetime-local" class="form-control" id="aDate" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备注</label>
+                        <textarea class="form-control" id="aNotes" rows="2" placeholder="选填，如探望事由等"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="submitApptBtn">提交申请</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let boundElders = [];
+    let currentElderId = null;
+    let currentPage = 1;
+    const pageSize = 20;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadBoundElders();
+        const urlParams = new URLSearchParams(window.location.search);
+        const elderIdFromUrl = urlParams.get('elder_id');
+        if (elderIdFromUrl) {
+            selectElderFromUrl(elderIdFromUrl);
+        }
+
+        if (window.FormValidator) {
+            FormValidator.setupForm('#appointmentForm', {
+                '#aElderId': ['required'],
+                '#aDate': ['required', 'date'],
+                '#aTime': ['required'],
+                '#aType': ['required']
+            });
+        }
+
+        if (window.InteractionUtils) {
+            InteractionUtils.trackForm('#appointmentForm');
+        }
+    });
+
+    function loadBoundElders() {
+        LoadingUtils.safeFetch('/api/v1/family/elders').then(data => {
+            if (data.code === 200) {
+                boundElders = data.data || [];
+                renderElderTabs();
+                // 填充模态框中的选择器
+                const opts = boundElders.map(e => `<option value="${e.id}">${e.name} (${e.room_number}房)</option>`).join('');
+                document.getElementById('aElderId').innerHTML = '<option value="">请选择老人</option>' + opts;
+                
+                if (boundElders.length > 0 && !currentElderId) {
+                    selectElder(boundElders[0].id);
+                }
+            }
+        }).catch(error => {
+            const container = document.getElementById('elderTabs');
+            LoadingUtils.showError(container, error.message || '加载绑定老人失败，请刷新重试', loadBoundElders);
+        });
+    }
+
+    function renderElderTabs() {
+        const container = document.getElementById('elderTabs');
+        
+        if (boundElders.length === 0) {
+            LoadingUtils.showEmpty(container, '暂未绑定任何老人，请联系管理员');
+            return;
+        }
+
+        let html = '';
+        boundElders.forEach(elder => {
+            html += `
+                <button type="button" class="btn btn-outline-primary" data-elder-id="${elder.id}" onclick="selectElder(${elder.id})">
+                    <i class="bi bi-person-circle me-1"></i>${elder.name}
+                </button>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function selectElderFromUrl(elderId) {
+        if (boundElders.length > 0) {
+            const elder = boundElders.find(e => String(e.id) === String(elderId));
+            if (elder) {
+                selectElder(elderId);
+            } else if (boundElders.length > 0) {
+                selectElder(boundElders[0].id);
+            }
+        } else {
+            setTimeout(() => selectElderFromUrl(elderId), 100);
+        }
+    }
+
+    function selectElder(elderId) {
+        currentElderId = elderId;
+        
+        // 更新标签高亮
+        document.querySelectorAll('#elderTabs button').forEach(btn => {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-primary');
+            if (btn.dataset.elderId === String(elderId)) {
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary');
+            }
+        });
+
+        renderContent();
+        loadAppts(1);
+    }
+
+    function renderContent() {
+        const container = document.getElementById('contentArea');
+        container.innerHTML = `
+            <div class="row mb-3 align-items-center">
+                <div class="col-md-8">
+                    <select class="form-select w-auto d-inline-block" id="statusFilter">
+                        <option value="">全部状态</option>
+                        <option value="pending">待确认</option>
+                        <option value="approved">已批准</option>
+                        <option value="completed">已完成</option>
+                        <option value="cancelled">已取消</option>
+                    </select>
+                    <button class="btn btn-outline-primary ms-2" id="searchBtn"><i class="bi bi-search"></i> 查询</button>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-primary" id="createApptBtn"><i class="bi bi-plus-lg"></i> 预约探望</button>
+                </div>
+            </div>
+
+            <div class="table-responsive bg-white p-3 rounded shadow-sm">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>老人</th>
+                            <th>房间号</th>
+                            <th>预约日期</th>
+                            <th>备注</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="apptsTableBody">
+                        <tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>正在加载...</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="text-muted small" id="paginationInfo">第 1 页，共 1 页</div>
+                    <nav><ul class="pagination pagination-sm mb-0" id="paginationNav"></ul></nav>
+                </div>
+            </div>
+        `;
+
+        // 绑定事件
+        document.getElementById('searchBtn').addEventListener('click', function() { loadAppts(1); });
+        document.getElementById('statusFilter').addEventListener('change', function() { loadAppts(1); });
+        document.getElementById('createApptBtn').addEventListener('click', function() {
+            document.getElementById('aElderId').value = currentElderId;
+            document.getElementById('aDate').value = '';
+            document.getElementById('aNotes').value = '';
+            loadAvailableSlots('in_person');
+            new bootstrap.Modal(document.getElementById('apptModal')).show();
+        });
+    }
+
+    function loadAppts(page) {
+        if (!currentElderId) return;
+        
+        currentPage = page;
+        const status = document.getElementById('statusFilter').value;
+        let url = `/api/v1/visits?type=in_person&elder_id=${currentElderId}&page=${page}&page_size=${pageSize}`;
+        if (status) url += `&status=${status}`;
+
+        LoadingUtils.safeFetch(url).then(data => {
+            if (data.code === 200) {
+                const list = data.data.list || [];
+                const tbody = document.getElementById('apptsTableBody');
+                if (list.length === 0) {
+                    LoadingUtils.showEmpty(tbody, '暂无预约探望记录');
+                } else {
+                    const statusMap = {
+                        pending: '<span class="badge bg-warning text-dark">待确认</span>',
+                        approved: '<span class="badge bg-success">已批准</span>',
+                        completed: '<span class="badge bg-secondary">已完成</span>',
+                        cancelled: '<span class="badge bg-light text-muted">已取消</span>'
+                    };
+                    tbody.innerHTML = list.map(v => `<tr>
+                        <td><strong>${v.elder_name}</strong></td>
+                        <td><span class="badge bg-secondary">${v.room_number}</span></td>
+                        <td>${new Date(v.appointment_date).toLocaleString('zh-CN')}</td>
+                        <td><small>${v.notes || '-'}</small></td>
+                        <td>${statusMap[v.status] || v.status}</td>
+                        <td>${new Date(v.created_at).toLocaleString('zh-CN')}</td>
+                        <td>
+                            ${v.status === 'pending' ? `<button class="btn btn-sm btn-outline-danger" onclick="cancelAppt(${v.id})"><i class="bi bi-x-circle"></i> 取消</button>` : ''}
+                        </td>
+                    </tr>`).join('');
+                }
+                renderPagination(data.data.pagination);
+            }
+        }).catch(error => {
+            const tbody = document.getElementById('apptsTableBody');
+            if (tbody) LoadingUtils.showError(tbody, error.message || '加载预约探望记录失败，请刷新重试', function() { loadAppts(currentPage); });
+        });
+    }
+
+    function renderPagination(p) {
+        document.getElementById('paginationInfo').textContent = `第 ${p.page} 页，共 ${p.total_pages} 页，总计 ${p.total} 条`;
+        let html = '';
+        if (p.page > 1) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page-1}">上一页</a></li>`;
+        for (let i = Math.max(1, p.page-2); i <= Math.min(p.total_pages, p.page+2); i++) {
+            html += `<li class="page-item ${i===p.page?'active':''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+        }
+        if (p.page < p.total_pages) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page+1}">下一页</a></li>`;
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav .page-link').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(this.dataset.page);
+                if (!isNaN(page)) loadAppts(page);
+            });
+        });
+    }
+
+    function createAppt() {
+        const elderId = document.getElementById('aElderId').value;
+        const date = document.getElementById('aDate').value;
+        const notes = document.getElementById('aNotes').value.trim();
+
+        if (!elderId) { showToast('请选择老人', 'warning'); return; }
+        if (!date) { showToast('请选择探望日期', 'warning'); return; }
+
+        document.getElementById('submitApptBtn').disabled = true;
+        LoadingUtils.safeFetch('/api/v1/visits', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ elder_id: parseInt(elderId), type: 'in_person', appointment_date: date, notes: notes })
+        }).then(data => {
+            if (data.code === 200) {
+                showToast('探望申请已提交，请等待确认', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('apptModal')).hide();
+                loadAppts(1);
+            } else {
+                showToast(data.msg, 'danger');
+            }
+        }).catch(error => showToast(error.message || '操作失败，请重试', 'danger'))
+        .finally(() => { document.getElementById('submitApptBtn').disabled = false; });
+    }
+
+    function cancelAppt(id) {
+        if (!confirm('确定取消此预约吗？')) return;
+        LoadingUtils.safeFetch(`/api/v1/visits/${id}/cancel`, { method: 'PUT' })
+            .then(data => {
+                if (data.code === 200) {
+                    showToast('预约已取消', 'success');
+                    loadAppts(currentPage);
+                } else {
+                    showToast(data.msg, 'danger');
+                }
+            }).catch(error => showToast(error.message || '操作失败，请重试', 'danger'));
+    }
+
+    // 加载可用预约时间段
+    function loadAvailableSlots(visitType) {
+        LoadingUtils.safeFetch(`/api/v1/visit-config?type=${visitType}`)
+            .then(data => {
+                if (data.code === 200) {
+                    window.availableSlots = data.data || [];
+                }
+            })
+            .catch(error => {
+                showToast(error.message || '加载预约时段配置失败', 'danger');
+            });
+    }
+
+    // 校验预约时间
+    document.getElementById('aDate').addEventListener('change', function() {
+        const date = this.value;
+        if (!date || !window.availableSlots) return;
+
+        // 解析日期
+        const dt = new Date(date);
+        const dayOfWeek = dt.getDay(); // 0=周日
+        const hour = dt.getHours();
+        const minute = dt.getMinutes();
+        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+
+        let isValid = false;
+        for (let slot of window.availableSlots) {
+            if (slot.is_enabled !== 1) continue;
+            if (slot.day_of_week !== null && slot.day_of_week !== dayOfWeek) continue;
+            if (slot.start_time <= timeStr && timeStr < slot.end_time) {
+                isValid = true;
+                break;
+            }
+        }
+
+        if (!isValid) {
+            showToast('请在可预约时段内选择时间：上午09:00-11:00，下午15:00-17:00', 'warning');
+            this.value = '';
+        }
+    });
+
+    // 绑定按钮事件
+    document.getElementById('submitApptBtn').addEventListener('click', createAppt);
+</script>
+{% endblock %}

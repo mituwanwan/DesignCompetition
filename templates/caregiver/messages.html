@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+
+{% block title %}消息沟通 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}消息沟通{% endblock %}
+
+{% block sidebar %}
+    <a href="/caregiver"><i class="bi bi-house-door"></i> 工作台</a>
+    <a href="/caregiver/tasks"><i class="bi bi-calendar-check"></i> 护理任务</a>
+    <a href="/caregiver/health-records"><i class="bi bi-heart-pulse"></i> 健康记录</a>
+    <a href="/caregiver/messages" class="active"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/caregiver/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/caregiver/incident-reports"><i class="bi bi-exclamation-triangle"></i> 异常上报</a>
+{% endblock %}
+
+{% block content %}
+<style>
+    .chat-container { height: calc(100vh - 160px); }
+    .elder-item { cursor: pointer; transition: background var(--transition-fast); border-left: 3px solid transparent; }
+    .elder-item:hover { background: var(--primary-soft); }
+    .elder-item.active { background: var(--primary-soft); border-left-color: var(--primary); }
+    .elder-item .unread-dot { width: 10px; height: 10px; min-width: 10px; border-radius: 50%; background: var(--danger); display: inline-block; }
+    .msg-bubble { max-width: 70%; word-wrap: break-word; position: relative; }
+    .msg-bubble-caregiver { background: var(--primary); color: var(--text-white); border-radius: 16px 16px 4px 16px; }
+    .msg-bubble-family { background: var(--bg-hover); color: var(--text-primary); border-radius: 16px 16px 16px 4px; }
+    .msg-time { font-size: var(--fs-xs); color: var(--text-muted); }
+    .msg-read-status { font-size: var(--fs-xs); }
+    .msg-read { color: var(--primary); }
+    .msg-unread { color: var(--text-light); }
+    .msg-date-divider { display: flex; align-items: center; margin: var(--space-md) 0; }
+    .msg-date-divider::before, .msg-date-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--border-light); }
+    .msg-date-divider span { padding: 0 12px; font-size: var(--fs-xs); color: var(--text-muted); white-space: nowrap; }
+    .chat-input-area { border-top: 1px solid var(--border-light); background: var(--bg-hover); }
+    #messageList { scroll-behavior: smooth; }
+
+    .mobile-elder-toggle { display: none !important; }
+
+    @media (max-width: 768px) {
+        .chat-container { height: calc(100vh - 120px) !important; }
+        .elder-list-col {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            bottom: 0;
+            width: 280px;
+            z-index: 1050;
+            transform: translateX(-100%);
+            transition: transform var(--transition-normal);
+            background: var(--bg-card);
+            box-shadow: var(--shadow-lg);
+        }
+        .elder-list-col.show-mobile { transform: translateX(0); }
+        .chat-col { width: 100% !important; }
+        .msg-bubble { max-width: 85% !important; }
+        .mobile-elder-toggle { display: inline-flex !important; }
+    }
+</style>
+
+<div class="container-fluid chat-container p-0">
+    <div class="row h-100 g-0">
+        <div class="col-md-4 col-lg-3 border-end h-100 d-flex flex-column">
+            <div class="p-3 border-bottom bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-people me-2"></i>负责老人</h6>
+                    <span class="badge bg-primary" id="totalUnreadBadge" style="display:none">0</span>
+                </div>
+            </div>
+            <div id="elderList" class="flex-grow-1 overflow-auto">
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>加载中...
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8 col-lg-9 h-100 d-flex flex-column">
+            <div class="p-3 border-bottom bg-light" id="chatHeader" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0" id="currentElderName"></h6>
+                        <small class="text-muted" id="currentElderInfo"></small>
+                    </div>
+                    <div id="currentElderFamily" class="text-muted small"></div>
+                </div>
+            </div>
+
+            <div class="flex-grow-1 d-flex align-items-center justify-content-center" id="emptyState">
+                <div class="text-center text-muted">
+                    <i class="bi bi-chat-dots fs-1 mb-3 d-block"></i>
+                    <h5>请选择一位老人开始聊天</h5>
+                    <p class="small">左侧列表显示您负责照护的老人</p>
+                </div>
+            </div>
+
+            <div class="flex-grow-1 overflow-auto p-3" id="messageList" style="display: none;"></div>
+
+            <div class="chat-input-area p-3" id="inputArea" style="display: none;">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="messageInput" placeholder="输入消息内容，按 Enter 发送..." maxlength="500">
+                    <button class="btn btn-primary" id="sendBtn">
+                        <i class="bi bi-send me-1"></i>发送
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var currentElderId = null;
+    var elders = [];
+    var refreshTimer = null;
+    var lastUnreadCount = -1;
+    var lastMessageIds = {};
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadElders();
+        startRefresh();
+
+        document.getElementById('sendBtn').addEventListener('click', sendMessage);
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    });
+
+    function startRefresh() {
+        refreshTimer = setInterval(function() {
+            loadElders();
+            if (currentElderId) loadMessages(currentElderId, true);
+        }, 3000);
+    }
+
+    function loadElders() {
+        LoadingUtils.safeFetch('/api/v1/caregiver/assigned-elders-with-messages').then(function(data) {
+            if (data.code === 200) {
+                elders = data.data || [];
+                renderElderList(elders);
+
+                var totalUnread = elders.reduce(function(sum, e) { return sum + (e.unread_count || 0); }, 0);
+                var badge = document.getElementById('totalUnreadBadge');
+                if (totalUnread > 0) {
+                    badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+
+                if (lastUnreadCount >= 0 && totalUnread > lastUnreadCount) {
+                    showToast('您有 ' + (totalUnread - lastUnreadCount) + ' 条新消息', 'info');
+                }
+                lastUnreadCount = totalUnread;
+            }
+        }).catch(function() {});
+    }
+
+    function renderElderList(elderList) {
+        var container = document.getElementById('elderList');
+        if (!elderList || elderList.length === 0) {
+            LoadingUtils.showEmpty(container, '暂无负责老人');
+            return;
+        }
+
+        elderList.sort(function(a, b) {
+            if ((a.unread_count || 0) !== (b.unread_count || 0)) return (b.unread_count || 0) - (a.unread_count || 0);
+            return (b.last_message_time || '').localeCompare(a.last_message_time || '');
+        });
+
+        container.innerHTML = elderList.map(function(elder) {
+            var isActive = currentElderId === elder.id;
+            var unreadHtml = elder.unread_count > 0
+                ? '<span class="badge bg-danger rounded-pill">' + (elder.unread_count > 99 ? '99+' : elder.unread_count) + '</span>'
+                : '';
+            var lastMsgPrefix = '';
+            if (elder.last_message_sender_role === 'caregiver') {
+                lastMsgPrefix = '<span class="text-primary">[护工]</span> ';
+            } else if (elder.last_message_sender_role === 'family') {
+                lastMsgPrefix = '<span class="text-success">[家属]</span> ';
+            }
+            var lastMsgHtml = elder.last_message
+                ? '<div class="text-truncate small mt-1" style="max-width:180px;color:' + (elder.unread_count > 0 ? 'var(--primary)' : 'var(--text-secondary)') + ';">' + lastMsgPrefix + escapeHtml(elder.last_message) + '</div>'
+                : '<div class="small mt-1 text-muted">暂无消息</div>';
+            var timeHtml = '';
+            if (elder.last_message_time) {
+                timeHtml = '<div class="small text-muted">' + formatShortTime(elder.last_message_time) + '</div>';
+            }
+
+            return '<div class="elder-item p-3 border-bottom ' + (isActive ? 'active' : '') + '" onclick="selectElder(' + elder.id + ')">' +
+                '<div class="d-flex justify-content-between align-items-start">' +
+                    '<div class="flex-grow-1 overflow-hidden">' +
+                        '<div class="d-flex justify-content-between align-items-center">' +
+                            '<strong class="text-truncate">' + escapeHtml(elder.name) + '</strong>' +
+                            unreadHtml +
+                        '</div>' +
+                        '<div class="text-muted small">' + (elder.room_number || '-') + '室</div>' +
+                        lastMsgHtml +
+                    '</div>' +
+                    '<div class="ms-2 text-end flex-shrink-0">' + timeHtml + '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    function selectElder(elderId) {
+        currentElderId = elderId;
+        var elder = elders.find(function(e) { return e.id === elderId; });
+        if (!elder) return;
+
+        document.getElementById('chatHeader').style.display = 'block';
+        document.getElementById('currentElderName').textContent = elder.name;
+        document.getElementById('currentElderInfo').textContent = (elder.room_number || '-') + '室';
+
+        var familyHtml = '';
+        if (elder.family_members && elder.family_members.length > 0) {
+            familyHtml = '<i class="bi bi-people me-1"></i>' + elder.family_members.map(function(f) { return f.name; }).join('、');
+        }
+        document.getElementById('currentElderFamily').innerHTML = familyHtml;
+
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('messageList').style.display = 'block';
+        document.getElementById('inputArea').style.display = 'block';
+
+        renderElderList(elders);
+        loadMessages(elderId, false);
+        document.getElementById('messageInput').focus();
+    }
+
+    function loadMessages(elderId, silent) {
+        LoadingUtils.safeFetch('/api/v1/caregiver/messages/by-elder/' + elderId).then(function(data) {
+            if (data.code === 200) {
+                var messages = data.data || [];
+                renderMessages(messages);
+                if (!silent) loadElders();
+            }
+        }).catch(function() {});
+    }
+
+    function renderMessages(messages) {
+        var container = document.getElementById('messageList');
+        if (!messages || messages.length === 0) {
+            LoadingUtils.showEmpty(container, '暂无消息，发送第一条消息吧');
+            return;
+        }
+
+        var html = '';
+        var lastDate = '';
+
+        messages.forEach(function(msg) {
+            var msgDate = formatDate(msg.created_at);
+            if (msgDate !== lastDate) {
+                html += '<div class="msg-date-divider"><span>' + msgDate + '</span></div>';
+                lastDate = msgDate;
+            }
+
+            var isCaregiver = msg.sender_role === 'caregiver';
+            var time = formatTime(msg.created_at);
+
+            var readStatusHtml = '';
+            if (isCaregiver) {
+                readStatusHtml = '<span class="msg-read-status ' + (msg.is_read ? 'msg-read' : 'msg-unread') + '">' +
+                    '<i class="bi bi-check-all"></i>' +
+                    (msg.is_read ? ' 已读' : ' 未读') +
+                '</span>';
+            }
+
+            html += '<div class="d-flex mb-3 ' + (isCaregiver ? 'justify-content-end' : 'justify-content-start') + '">' +
+                '<div class="msg-bubble ' + (isCaregiver ? 'msg-bubble-caregiver' : 'msg-bubble-family') + '">' +
+                    '<div class="px-3 py-2">' +
+                        '<div class="small mb-1 ' + (isCaregiver ? 'text-white-50' : 'text-muted') + '" style="font-size:var(--fs-xs);">' +
+                            escapeHtml(msg.sender_name || '') + (isCaregiver ? ' (护工)' : ' (家属)') +
+                        '</div>' +
+                        '<div style="line-height:1.6;">' + escapeHtml(msg.content) + '</div>' +
+                    '</div>' +
+                    '<div class="d-flex ' + (isCaregiver ? 'justify-content-end' : 'justify-content-start') + ' px-3 pb-1">' +
+                        '<span class="msg-time">' + time + '</span>' +
+                        readStatusHtml +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        });
+
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function sendMessage() {
+        if (!currentElderId) {
+            showToast('请先选择一位老人', 'warning');
+            return;
+        }
+
+        var input = document.getElementById('messageInput');
+        var content = input.value.trim();
+        if (!content) {
+            showToast('请输入消息内容', 'warning');
+            return;
+        }
+
+        var btn = document.getElementById('sendBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        LoadingUtils.safeFetch('/api/v1/caregiver/messages/send', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ elder_id: currentElderId, content: content })
+        }).then(function(data) {
+            if (data.code === 200) {
+                input.value = '';
+                loadMessages(currentElderId, false);
+                loadElders();
+            } else {
+                showToast(data.msg || '发送失败', 'danger');
+            }
+        }).catch(function(err) {
+            showToast(err.message || '操作失败，请重试', 'danger');
+        }).finally(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send me-1"></i>发送';
+        });
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        var d = new Date(dateStr);
+        var now = new Date();
+        var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        var msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        var diff = today - msgDay;
+        if (diff === 0) return '今天';
+        if (diff === 86400000) return '昨天';
+        return d.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+    }
+
+    function formatTime(dateStr) {
+        if (!dateStr) return '';
+        var d = new Date(dateStr);
+        return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatShortTime(dateStr) {
+        if (!dateStr) return '';
+        var d = new Date(dateStr);
+        var now = new Date();
+        var diff = now - d;
+        if (diff < 60000) return '刚刚';
+        if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+        if (diff < 86400000) return formatTime(dateStr);
+        return d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+</script>
+{% endblock %}

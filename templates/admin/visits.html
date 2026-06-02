@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+
+{% block title %}探视预约管理 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}探视预约管理{% endblock %}
+
+{% block sidebar %}
+    <a href="/admin"><i class="bi bi-house-door me-2"></i> 首页数据看板</a>
+    <a href="/admin/elders"><i class="bi bi-people me-2"></i> 老人信息管理</a>
+    <a href="/admin/users"><i class="bi bi-person-badge me-2"></i> 账号权限管理</a>
+    <a href="/admin/alarms"><i class="bi bi-exclamation-triangle me-2"></i> 异常报警中心</a>
+    <a href="/admin/visits" class="active"><i class="bi bi-calendar-check me-2"></i> 探视预约管理</a>
+    <a href="/admin/messages"><i class="bi bi-chat-left-text me-2"></i> 消息管理</a>
+    <a href="/admin/family-messages"><i class="bi bi-chat-heart me-2"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag me-2"></i> 异常上报管理</a>
+    <a href="/admin/reports"><i class="bi bi-bar-chart me-2"></i> 数据统计分析</a>
+    <a href="/admin/logs"><i class="bi bi-journal-text me-2"></i> 系统日志</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-action-btn { padding: 0.25rem 0.5rem; font-size: var(--fs-sm); }
+    .stat-card { border-radius: var(--radius-md); padding: var(--space-md); text-align: center; }
+    .stat-card h3 { margin: 5px 0; }
+    .filter-section { background: var(--bg-hover); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="stat-card bg-warning text-white">
+                <h6><i class="bi bi-clock me-1"></i> 待审批</h6>
+                <h3 id="pendingCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-success text-white">
+                <h6><i class="bi bi-check-circle me-1"></i> 已批准</h6>
+                <h3 id="approvedCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-secondary text-white">
+                <h6><i class="bi bi-calendar-check me-1"></i> 已完成</h6>
+                <h3 id="completedCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-info text-white">
+                <h6><i class="bi bi-calendar-range me-1"></i> 总预约数</h6>
+                <h3 id="totalCount">--</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-section">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterType">
+                    <option value="">全部类型</option>
+                    <option value="video">视频探视</option>
+                    <option value="in_person">预约探望</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterStatus">
+                    <option value="">全部状态</option>
+                    <option value="pending">待确认</option>
+                    <option value="approved">已批准</option>
+                    <option value="completed">已完成</option>
+                    <option value="cancelled">已取消</option>
+                    <option value="rejected">已拒绝</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                    <input type="date" class="form-control" id="filterStartDate" placeholder="开始日期">
+                    <span class="input-group-text">至</span>
+                    <input type="date" class="form-control" id="filterEndDate" placeholder="结束日期">
+                </div>
+            </div>
+            <div class="col-md-5 text-end">
+                <button class="btn btn-primary btn-sm me-1" id="searchBtn"><i class="bi bi-search"></i> 查询</button>
+                <button class="btn btn-outline-secondary btn-sm me-1" id="resetBtn"><i class="bi bi-x-circle"></i> 重置</button>
+                <button class="btn btn-outline-primary btn-sm me-1" id="configBtn"><i class="bi bi-clock-history"></i> 时间配置</button>
+                <button class="btn btn-outline-success btn-sm" onclick="exportData()"><i class="bi bi-file-earmark-excel"></i> 导出Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive bg-white p-3 rounded shadow-sm">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>老人</th>
+                    <th>房间号</th>
+                    <th>家属</th>
+                    <th>类型</th>
+                    <th>预约日期</th>
+                    <th>备注</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="visitsTableBody">
+                <tr><td colspan="10" class="text-center text-muted py-4"><i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>正在加载...</td></tr>
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted small" id="paginationInfo">第 1 页，共 1 页</div>
+            <nav><ul class="pagination pagination-sm mb-0" id="paginationNav"></ul></nav>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="configModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-clock-history"></i> 预约时间段配置</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>类型</th>
+                                <th>星期</th>
+                                <th>开始时间</th>
+                                <th>结束时间</th>
+                                <th>最大预约数</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="configTableBody">
+                            <tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-hourglass-split"></i> 正在加载...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="addConfigBtn"><i class="bi bi-plus-circle"></i> 添加时间段</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editConfigModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editConfigTitle">添加时间段</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="configForm">
+                    <div class="mb-3">
+                        <label class="form-label">类型 <span class="text-danger">*</span></label>
+                        <select class="form-select" id="configType">
+                            <option value="all">全部</option>
+                            <option value="video">视频探视</option>
+                            <option value="in_person">预约探望</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">星期</label>
+                        <select class="form-select" id="configDay">
+                            <option value="">全部星期</option>
+                            <option value="0">星期日</option>
+                            <option value="1">星期一</option>
+                            <option value="2">星期二</option>
+                            <option value="3">星期三</option>
+                            <option value="4">星期四</option>
+                            <option value="5">星期五</option>
+                            <option value="6">星期六</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">开始时间 <span class="text-danger">*</span></label>
+                        <input type="time" class="form-control" id="configStart">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">结束时间 <span class="text-danger">*</span></label>
+                        <input type="time" class="form-control" id="configEnd">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">最大预约数 <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="configMax" min="1" value="5">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveConfigBtn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentPage = 1;
+    const pageSize = 20;
+    let editingConfigId = null;
+    let autoRefreshTimer = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadVisits(1);
+        loadVisitStats();
+        document.getElementById('searchBtn').addEventListener('click', function() { loadVisits(1); loadVisitStats(); });
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterStartDate').value = '';
+            document.getElementById('filterEndDate').value = '';
+            loadVisits(1);
+            loadVisitStats();
+        });
+        document.getElementById('configBtn').addEventListener('click', openConfigModal);
+        document.getElementById('addConfigBtn').addEventListener('click', openAddConfigModal);
+        document.getElementById('saveConfigBtn').addEventListener('click', saveConfig);
+
+        autoRefreshTimer = setInterval(function() {
+            loadVisitStats();
+        }, 30000);
+    });
+
+    function loadVisitStats() {
+        LoadingUtils.safeFetch('/api/v1/visits?page=1&page_size=1').then(data => {
+            if (data.code === 200) {
+                document.getElementById('totalCount').textContent = data.data.pagination.total;
+            }
+        }).catch(() => {});
+        LoadingUtils.safeFetch('/api/v1/visits?status=pending&page=1&page_size=1').then(data => {
+            if (data.code === 200) {
+                document.getElementById('pendingCount').textContent = data.data.pagination.total;
+            }
+        }).catch(() => {});
+        LoadingUtils.safeFetch('/api/v1/visits?status=approved&page=1&page_size=1').then(data => {
+            if (data.code === 200) {
+                document.getElementById('approvedCount').textContent = data.data.pagination.total;
+            }
+        }).catch(() => {});
+        LoadingUtils.safeFetch('/api/v1/visits?status=completed&page=1&page_size=1').then(data => {
+            if (data.code === 200) {
+                document.getElementById('completedCount').textContent = data.data.pagination.total;
+            }
+        }).catch(() => {});
+    }
+
+    function loadVisits(page) {
+        currentPage = page;
+        const type = document.getElementById('filterType').value;
+        const status = document.getElementById('filterStatus').value;
+        let url = `/api/v1/visits?page=${page}&page_size=${pageSize}`;
+        if (type) url += `&type=${type}`;
+        if (status) url += `&status=${status}`;
+
+        LoadingUtils.safeFetch(url).then(data => {
+            if (data.code === 200) {
+                const list = data.data.list || [];
+                const tbody = document.getElementById('visitsTableBody');
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-2"></i>暂无探视预约记录</td></tr>';
+                } else {
+                    const typeMap = {video: '<span class="badge bg-info">视频探视</span>', in_person: '<span class="badge bg-primary">预约探望</span>'};
+                    const statusMap = {
+                        pending: '<span class="badge bg-warning text-dark">待确认</span>',
+                        approved: '<span class="badge bg-success">已批准</span>',
+                        completed: '<span class="badge bg-secondary">已完成</span>',
+                        cancelled: '<span class="badge bg-light text-muted">已取消</span>',
+                        rejected: '<span class="badge bg-danger">已拒绝</span>'
+                    };
+                    tbody.innerHTML = list.map(v => `<tr>
+                        <td>${v.id}</td>
+                        <td><strong>${v.elder_name}</strong></td>
+                        <td><span class="badge bg-secondary">${v.room_number}</span></td>
+                        <td>${v.family_user_name || '-'}</td>
+                        <td>${typeMap[v.type] || v.type}</td>
+                        <td>${v.appointment_date ? new Date(v.appointment_date).toLocaleString('zh-CN') : '-'}</td>
+                        <td><small>${v.notes || '-'}${v.reject_reason ? '<br><span class="text-danger">拒绝原因：'+v.reject_reason+'</span>' : ''}</small></td>
+                        <td>${statusMap[v.status] || v.status}</td>
+                        <td>${v.created_at ? new Date(v.created_at).toLocaleString('zh-CN') : '-'}</td>
+                        <td>
+                            ${v.status === 'pending' ? `<button class="btn btn-sm btn-outline-success table-action-btn" onclick="approveVisit(${v.id})"><i class="bi bi-check"></i> 批准</button> <button class="btn btn-sm btn-outline-danger table-action-btn" onclick="rejectVisit(${v.id})"><i class="bi bi-x"></i> 拒绝</button>` : ''}
+                            ${v.status === 'approved' ? `<button class="btn btn-sm btn-outline-primary table-action-btn" onclick="completeVisit(${v.id})"><i class="bi bi-calendar-check"></i> 完成</button>` : ''}
+                        </td>
+                    </tr>`).join('');
+                }
+                renderPagination(data.data.pagination);
+            }
+        }).catch(err => {
+            showToast(err.message || '加载探视预约失败', 'danger');
+        });
+    }
+
+    function renderPagination(p) {
+        document.getElementById('paginationInfo').textContent = `第 ${p.page} 页，共 ${p.total_pages} 页，总计 ${p.total} 条`;
+        let html = '';
+        if (p.page > 1) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page-1}">上一页</a></li>`;
+        for (let i = Math.max(1, p.page-2); i <= Math.min(p.total_pages, p.page+2); i++) {
+            html += `<li class="page-item ${i===p.page?'active':''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+        }
+        if (p.page < p.total_pages) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page+1}">下一页</a></li>`;
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav .page-link').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(this.dataset.page);
+                if (!isNaN(page)) loadVisits(page);
+            });
+        });
+    }
+
+    function approveVisit(id) {
+        if (!confirm('确定批准此探视预约吗？')) return;
+        LoadingUtils.safeFetch(`/api/v1/visits/${id}/approve`, { method: 'PUT' })
+            .then(data => {
+                if (data.code === 200) {
+                    showToast('预约已批准', 'success');
+                    loadVisits(currentPage);
+                    loadVisitStats();
+                } else {
+                    showToast(data.msg, 'danger');
+                }
+            }).catch(err => showToast(err.message || '操作失败', 'danger'));
+    }
+
+    function rejectVisit(id) {
+        var reason = prompt('请输入拒绝原因（可选）：');
+        if (reason === null) return;
+        LoadingUtils.safeFetch(`/api/v1/visits/${id}/reject`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ reason: reason || '' })
+        }).then(data => {
+            if (data.code === 200) {
+                showToast('预约已拒绝', 'success');
+                loadVisits(currentPage);
+                loadVisitStats();
+            } else {
+                showToast(data.msg, 'danger');
+            }
+        }).catch(err => showToast(err.message || '操作失败', 'danger'));
+    }
+
+    function completeVisit(id) {
+        if (!confirm('确定标记此预约为已完成吗？')) return;
+        LoadingUtils.safeFetch(`/api/v1/visits/${id}/complete`, { method: 'PUT' })
+            .then(data => {
+                if (data.code === 200) {
+                    showToast('预约已标记为完成', 'success');
+                    loadVisits(currentPage);
+                    loadVisitStats();
+                } else {
+                    showToast(data.msg, 'danger');
+                }
+            }).catch(err => showToast(err.message || '操作失败', 'danger'));
+    }
+
+    function openConfigModal() {
+        loadConfigs();
+        new bootstrap.Modal(document.getElementById('configModal')).show();
+    }
+
+    function loadConfigs() {
+        LoadingUtils.safeFetch('/api/v1/visit-config')
+            .then(data => {
+                if (data.code === 200) {
+                    renderConfigs(data.data);
+                }
+            }).catch(err => showToast(err.message || '加载配置失败', 'danger'));
+    }
+
+    function renderConfigs(configs) {
+        const tbody = document.getElementById('configTableBody');
+        if (!configs || configs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> 暂无配置</td></tr>';
+            return;
+        }
+        const typeMap = {video: '视频探视', in_person: '预约探望', all: '全部'};
+        const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        tbody.innerHTML = configs.map(config => `
+            <tr>
+                <td><span class="badge bg-primary">${typeMap[config.visit_type]}</span></td>
+                <td>${config.day_of_week !== null ? dayNames[config.day_of_week] : '全部'}</td>
+                <td>${config.start_time}</td>
+                <td>${config.end_time}</td>
+                <td>${config.max_appointments}</td>
+                <td><span class="badge ${config.is_enabled === 1 ? 'bg-success' : 'bg-light text-muted'}">${config.is_enabled === 1 ? '启用' : '禁用'}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="toggleConfig(${config.id}, ${config.is_enabled === 1 ? 0 : 1})">
+                        <i class="bi ${config.is_enabled === 1 ? 'bi-pause-circle' : 'bi-play-circle'}"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteConfig(${config.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function openAddConfigModal() {
+        editingConfigId = null;
+        document.getElementById('editConfigTitle').textContent = '添加时间段';
+        document.getElementById('configType').value = 'all';
+        document.getElementById('configDay').value = '';
+        document.getElementById('configStart').value = '';
+        document.getElementById('configEnd').value = '';
+        document.getElementById('configMax').value = '5';
+        bootstrap.Modal.getInstance(document.getElementById('configModal')).hide();
+        new bootstrap.Modal(document.getElementById('editConfigModal')).show();
+    }
+
+    function saveConfig() {
+        const type = document.getElementById('configType').value;
+        const day = document.getElementById('configDay').value;
+        const start = document.getElementById('configStart').value;
+        const end = document.getElementById('configEnd').value;
+        const max = document.getElementById('configMax').value;
+        if (!start || !end) { showToast('请填写开始和结束时间', 'warning'); return; }
+        LoadingUtils.safeFetch('/api/v1/visit-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ visit_type: type, day_of_week: day || null, start_time: start, end_time: end, max_appointments: parseInt(max), is_enabled: 1 })
+        }).then(data => {
+            if (data.code === 200) {
+                showToast('配置保存成功', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('editConfigModal')).hide();
+                openConfigModal();
+            } else { showToast(data.msg, 'danger'); }
+        }).catch(err => showToast(err.message || '保存配置失败', 'danger'));
+    }
+
+    function toggleConfig(id, enabled) {
+        LoadingUtils.safeFetch(`/api/v1/visit-config/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_enabled: enabled })
+        }).then(data => {
+            if (data.code === 200) { showToast(enabled === 1 ? '已启用' : '已禁用', 'success'); loadConfigs(); }
+            else { showToast(data.msg, 'danger'); }
+        }).catch(err => showToast(err.message || '操作失败', 'danger'));
+    }
+
+    function deleteConfig(id) {
+        if (!confirm('确定删除此配置吗？')) return;
+        LoadingUtils.safeFetch(`/api/v1/visit-config/${id}`, { method: 'DELETE' })
+            .then(data => {
+                if (data.code === 200) { showToast('已删除', 'success'); loadConfigs(); }
+                else { showToast(data.msg, 'danger'); }
+            }).catch(err => showToast(err.message || '删除失败', 'danger'));
+    }
+
+    function exportData() {
+        const type = document.getElementById('filterType').value;
+        const status = document.getElementById('filterStatus').value;
+        let url = '/api/v1/visits/export?';
+        if (type) url += `type=${type}&`;
+        if (status) url += `status=${status}&`;
+        window.location.href = url;
+        showToast('正在导出探视预约数据...', 'info');
+    }
+</script>
+{% endblock %}

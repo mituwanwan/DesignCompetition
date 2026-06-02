@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频通话 - 智慧养老院管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/variables.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg-dark); color: var(--text-white); font-family: var(--font-family); height: 100vh; overflow: hidden; }
+
+        .video-room { display: flex; flex-direction: column; height: 100vh; }
+
+        .video-header {
+            padding: 12px 20px; background: rgba(0,0,0,0.3); backdrop-filter: blur(10px);
+            display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+        }
+        .video-header h5 { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+        .video-header .timer { font-size: var(--fs-sm); color: var(--text-muted); }
+
+        .video-body { flex: 1; display: flex; position: relative; overflow: hidden; }
+
+        .remote-video {
+            flex: 1; background: var(--neutral-7); display: flex; align-items: center;
+            justify-content: center; position: relative;
+        }
+        .remote-video video { width: 100%; height: 100%; object-fit: cover; }
+        .remote-video .placeholder {
+            text-align: center; color: var(--text-secondary);
+        }
+        .remote-video .placeholder i { font-size: var(--icon-3xl); display: block; margin-bottom: 16px; }
+        .remote-video .placeholder h4 { color: var(--text-muted); }
+        .remote-video .elder-name-overlay {
+            position: absolute; bottom: 20px; left: 20px;
+            background: rgba(0,0,0,0.5); padding: 6px 16px; border-radius: 8px;
+            font-size: var(--fs-base);
+        }
+
+        .local-video {
+            position: absolute; bottom: 20px; right: 20px; width: 200px; height: 150px;
+            border-radius: var(--radius-md); overflow: hidden; border: 2px solid rgba(255,255,255,0.2);
+            background: var(--bg-dark); z-index: 10;
+        }
+        .local-video video { width: 100%; height: 100%; object-fit: cover; }
+        .local-video .placeholder {
+            width: 100%; height: 100%; display: flex; align-items: center;
+            justify-content: center; color: var(--text-secondary); font-size: var(--fs-sm);
+        }
+
+        .video-controls {
+            padding: 16px 20px; background: rgba(0,0,0,0.4); backdrop-filter: blur(10px);
+            display: flex; justify-content: center; align-items: center; gap: 16px; flex-shrink: 0;
+        }
+        .ctrl-btn {
+            width: 52px; height: 52px; border-radius: 50%; border: none;
+            display: flex; align-items: center; justify-content: center;
+            font-size: var(--fs-xl); cursor: pointer; transition: all var(--transition-fast); color: var(--text-white);
+        }
+        .ctrl-btn:hover { transform: scale(1.1); }
+        .ctrl-btn.btn-mic { background: var(--text-primary); }
+        .ctrl-btn.btn-mic.off { background: var(--danger); }
+        .ctrl-btn.btn-cam { background: var(--text-primary); }
+        .ctrl-btn.btn-cam.off { background: var(--danger); }
+        .ctrl-btn.btn-hangup { background: var(--danger); width: 64px; height: 64px; font-size: var(--fs-2xl); }
+        .ctrl-btn.btn-hangup:hover { background: var(--danger-hover); }
+        .ctrl-btn.btn-fullscreen { background: var(--text-primary); }
+
+        .connecting-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(26,26,46,0.95); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .connecting-overlay .spinner { font-size: var(--icon-xl); margin-bottom: 16px; }
+        .connecting-overlay h5 { margin-bottom: 8px; }
+        .connecting-overlay p { color: var(--text-muted); font-size: var(--fs-base); }
+
+        .error-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(26,26,46,0.98); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .error-overlay i { font-size: var(--icon-2xl); color: var(--danger); margin-bottom: 16px; }
+        .error-overlay h5 { margin-bottom: 8px; }
+        .error-overlay p { color: var(--text-muted); font-size: var(--fs-base); max-width: 400px; text-align: center; }
+        .error-overlay .btn-back { margin-top: 20px; }
+
+        @media (max-width: 768px) {
+            .video-header { padding: 8px 12px; }
+            .video-header h5 { font-size: var(--fs-sm); }
+            .video-header .timer { font-size: var(--fs-xs); }
+            .local-video { width: 120px; height: 90px; bottom: 10px; right: 10px; }
+            .video-controls { padding: 10px 12px; gap: 10px; }
+            .ctrl-btn { width: 44px; height: 44px; font-size: var(--fs-base); }
+            .ctrl-btn.btn-hangup { width: 52px; height: 52px; font-size: var(--fs-lg); }
+            .remote-video .elder-name-overlay { bottom: 10px; left: 10px; padding: 4px 10px; font-size: var(--fs-sm); }
+        }
+
+        @media (max-width: 480px) {
+            .local-video { width: 100px; height: 75px; bottom: 8px; right: 8px; border-radius: var(--radius-sm); }
+            .ctrl-btn { width: 40px; height: 40px; font-size: var(--fs-sm); }
+            .ctrl-btn.btn-hangup { width: 48px; height: 48px; font-size: var(--fs-base); }
+            .video-controls { gap: 8px; padding: 8px; }
+        }
+    </style>
+</head>
+<body>
+<div class="video-room">
+    <div class="video-header">
+        <h5><i class="bi bi-camera-video me-2"></i>视频探视</h5>
+        <div class="timer" id="callTimer">准备中...</div>
+    </div>
+
+    <div class="video-body">
+        <div class="remote-video" id="remoteVideoArea">
+            <div class="placeholder" id="remotePlaceholder">
+                <i class="bi bi-person-video3"></i>
+                <h4>等待对方加入...</h4>
+                <p>视频通话将在预约时间内自动连接</p>
+            </div>
+            <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
+            <div class="elder-name-overlay" id="elderNameOverlay" style="display:none;"></div>
+        </div>
+
+        <div class="local-video">
+            <div class="placeholder" id="localPlaceholder">
+                <i class="bi bi-person"></i>
+            </div>
+            <video id="localVideo" autoplay playsinline muted style="display:none;"></video>
+        </div>
+
+        <div class="connecting-overlay" id="connectingOverlay">
+            <div class="spinner"><i class="bi bi-camera-video spinning"></i></div>
+            <h5>正在连接视频...</h5>
+            <p>请允许浏览器访问摄像头和麦克风</p>
+        </div>
+
+        <div class="error-overlay" id="errorOverlay" style="display:none;">
+            <i class="bi bi-exclamation-triangle"></i>
+            <h5 id="errorTitle">无法连接</h5>
+            <p id="errorMsg">视频链接无效或已过期</p>
+            <button class="btn btn-outline-light btn-back" onclick="window.close()">关闭窗口</button>
+        </div>
+    </div>
+
+    <div class="video-controls">
+        <button class="ctrl-btn btn-mic" id="btnMic" onclick="toggleMic()" title="麦克风">
+            <i class="bi bi-mic-fill"></i>
+        </button>
+        <button class="ctrl-btn btn-cam" id="btnCam" onclick="toggleCam()" title="摄像头">
+            <i class="bi bi-camera-video-fill"></i>
+        </button>
+        <button class="ctrl-btn btn-hangup" id="btnHangup" onclick="hangup()" title="挂断">
+            <i class="bi bi-telephone-x-fill"></i>
+        </button>
+        <button class="ctrl-btn btn-fullscreen" id="btnFullscreen" onclick="toggleFullscreen()" title="全屏">
+            <i class="bi bi-fullscreen"></i>
+        </button>
+    </div>
+</div>
+
+<script>
+    var token = window.location.pathname.split('/').pop();
+    var localStream = null;
+    var micEnabled = true;
+    var camEnabled = true;
+    var callStartTime = null;
+    var timerInterval = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        validateAndConnect();
+    });
+
+    function validateAndConnect() {
+        fetch('/api/v1/visits/video-token/' + token)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200) {
+                    document.getElementById('elderNameOverlay').textContent = data.data.elder_name;
+                    document.getElementById('elderNameOverlay').style.display = 'block';
+                    startCamera();
+                } else {
+                    showError('无法进入视频通话', data.msg || '视频链接无效或已过期');
+                }
+            })
+            .catch(function() {
+                showError('连接失败', '网络错误，请检查网络连接后重试');
+            });
+    }
+
+    function startCamera() {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(function(stream) {
+                localStream = stream;
+                var localVideo = document.getElementById('localVideo');
+                localVideo.srcObject = stream;
+                localVideo.style.display = 'block';
+                document.getElementById('localPlaceholder').style.display = 'none';
+
+                document.getElementById('connectingOverlay').style.display = 'none';
+                startCallTimer();
+
+                showToast('摄像头已就绪，等待对方加入...', 'info');
+            })
+            .catch(function(err) {
+                document.getElementById('connectingOverlay').style.display = 'none';
+                if (err.name === 'NotAllowedError') {
+                    showError('权限被拒绝', '请允许浏览器访问摄像头和麦克风，然后刷新页面重试');
+                } else if (err.name === 'NotFoundError') {
+                    showError('未检测到设备', '未找到摄像头或麦克风设备，请检查设备连接');
+                } else {
+                    showError('设备错误', '无法启动摄像头：' + err.message);
+                }
+            });
+    }
+
+    function startCallTimer() {
+        callStartTime = Date.now();
+        timerInterval = setInterval(function() {
+            var elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+            var mins = Math.floor(elapsed / 60);
+            var secs = elapsed % 60;
+            document.getElementById('callTimer').textContent =
+                '通话中 ' + (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+        }, 1000);
+    }
+
+    function toggleMic() {
+        if (!localStream) return;
+        micEnabled = !micEnabled;
+        localStream.getAudioTracks().forEach(function(track) { track.enabled = micEnabled; });
+        var btn = document.getElementById('btnMic');
+        btn.classList.toggle('off', !micEnabled);
+        btn.innerHTML = micEnabled ? '<i class="bi bi-mic-fill"></i>' : '<i class="bi bi-mic-mute-fill"></i>';
+    }
+
+    function toggleCam() {
+        if (!localStream) return;
+        camEnabled = !camEnabled;
+        localStream.getVideoTracks().forEach(function(track) { track.enabled = camEnabled; });
+        var btn = document.getElementById('btnCam');
+        btn.classList.toggle('off', !camEnabled);
+        btn.innerHTML = camEnabled ? '<i class="bi bi-camera-video-fill"></i>' : '<i class="bi bi-camera-video-off-fill"></i>';
+    }
+
+    function hangup() {
+        if (localStream) {
+            localStream.getTracks().forEach(function(track) { track.stop(); });
+        }
+        if (timerInterval) clearInterval(timerInterval);
+        window.close();
+        setTimeout(function() { window.location.href = '/family/video-visit'; }, 500);
+    }
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    function showError(title, msg) {
+        document.getElementById('connectingOverlay').style.display = 'none';
+        document.getElementById('errorTitle').textContent = title;
+        document.getElementById('errorMsg').textContent = msg;
+        document.getElementById('errorOverlay').style.display = 'flex';
+    }
+
+    function showToast(msg, type) {
+        var toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;' +
+            'padding:10px 24px;border-radius:8px;font-size:var(--fs-base);color:var(--text-white);' +
+            'background:' + (type === 'info' ? 'var(--primary)' : type === 'success' ? 'var(--success)' : 'var(--danger)') + ';' +
+            'box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s;';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(function() { toast.style.opacity = '0'; setTimeout(function() { toast.remove(); }, 300); }, 3000);
+    }
+</script>
+
+<style>
+    @keyframes spinning { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .spinning { animation: spinning 2s linear infinite; }
+</style>
+</body>
+</html>

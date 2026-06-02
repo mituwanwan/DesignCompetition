@@ -1,0 +1,169 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}登录 - 智慧养老院管理系统{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <!-- 左侧视觉区 -->
+    <div class="auth-visual">
+        <div class="visual-content">
+            <h2>智慧养老，关爱无限</h2>
+            <p>专业的智慧养老解决方案，为每位老人提供温暖的晚年生活</p>
+
+            <div class="visual-features">
+                <div class="feature-item">
+                    <i class="bi bi-heart-pulse"></i>
+                    <span>健康监测</span>
+                </div>
+                <div class="feature-item">
+                    <i class="bi bi-bell"></i>
+                    <span>智能提醒</span>
+                </div>
+                <div class="feature-item">
+                    <i class="bi bi-people"></i>
+                    <span>亲情连接</span>
+                </div>
+                <div class="feature-item">
+                    <i class="bi bi-shield-check"></i>
+                    <span>安全守护</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧表单区 -->
+    <div class="auth-form">
+        <div class="form-container">
+            <!-- Logo区域 -->
+            <div class="auth-logo">
+                <i class="bi bi-hospital-fill"></i>
+                <h1>智慧养老院管理系统</h1>
+                <p>请选择您的角色并登录</p>
+            </div>
+
+            <!-- 登录表单 -->
+            <form id="loginForm" method="post" novalidate>
+                <!-- 角色选择 -->
+                <div class="form-group">
+                    <label for="role" class="form-label">角色</label>
+                    <div class="input-with-icon">
+                        <i class="bi bi-person-badge-fill"></i>
+                        <select class="form-select" id="role" name="role" required aria-label="选择登录角色">
+                            <option value="" selected disabled>请选择您的角色</option>
+                            <option value="admin">管理员</option>
+                            <option value="caregiver">护工</option>
+                            <option value="family">子女</option>
+                        </select>
+                    </div>
+                    <div class="invalid-feedback">请选择您的登录角色</div>
+                </div>
+
+                <!-- 用户名 -->
+                <div class="form-group">
+                    <label for="username" class="form-label">用户名</label>
+                    <div class="input-with-icon">
+                        <i class="bi bi-person-fill"></i>
+                        <input type="text" class="form-control" id="username" name="username"
+                               placeholder="请输入您的用户名" required autocomplete="username">
+                    </div>
+                    <div class="invalid-feedback">请输入用户名，至少2个字符</div>
+                </div>
+
+                <!-- 密码 -->
+                <div class="form-group">
+                    <label for="password" class="form-label">密码</label>
+                    <div class="input-with-icon">
+                        <i class="bi bi-key-fill"></i>
+                        <input type="password" class="form-control" id="password" name="password"
+                               placeholder="请输入您的密码" required autocomplete="current-password">
+                    </div>
+                    <div class="invalid-feedback">请输入密码，至少6个字符</div>
+                </div>
+
+                <!-- 记住我和忘记密码 -->
+                <div class="form-options">
+                    <div class="remember-me">
+                        <input type="checkbox" id="rememberMe" name="rememberMe">
+                        <label for="rememberMe">记住我</label>
+                    </div>
+                    <a href="#" class="forgot-password" id="forgotPassword">忘记密码？</a>
+                </div>
+
+                <!-- 错误消息 -->
+                <div id="errorMsg" class="error-message" role="alert" aria-live="assertive"></div>
+
+                <!-- 登录按钮 -->
+                <button type="submit" class="btn-login" id="loginBtn">
+                    立即登录
+                </button>
+            </form>
+
+            <!-- 版权信息 -->
+            <div class="auth-footer">
+                <div class="copyright">
+                    © 2026 智慧养老院管理系统
+                </div>
+                <div class="footer-links">
+                    <a href="#" target="_blank">用户隐私政策</a>
+                    <a href="#" target="_blank">帮助中心</a>
+                    <a href="#" target="_blank">联系我们</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 登录页面特定的JavaScript初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        // 角色选择下拉框美化
+        const roleSelect = document.getElementById('role');
+        if (roleSelect) {
+            // 添加自定义样式类
+            roleSelect.classList.add('custom-select');
+
+            // 监听变化事件
+            roleSelect.addEventListener('change', function() {
+                if (this.value) {
+                    this.classList.add('selected');
+                } else {
+                    this.classList.remove('selected');
+                }
+            });
+        }
+
+        // 表单提交事件处理
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                // 使用auth.js中的AuthManager处理登录
+                if (window.authManager) {
+                    window.authManager.handleLogin(e);
+                } else {
+                    // 备用方案
+                    console.error('AuthManager未初始化');
+                    alert('系统初始化失败，请刷新页面重试');
+                }
+            });
+        }
+
+        // 键盘快捷键
+        document.addEventListener('keydown', function(e) {
+            // Enter键提交表单（不在文本域中时）
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                const activeForm = document.querySelector('form');
+                if (activeForm) {
+                    const submitBtn = activeForm.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.click();
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

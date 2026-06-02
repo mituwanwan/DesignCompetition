@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+
+{% block title %}管理员控制台 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}今日概览{% endblock %}
+
+{% block sidebar %}
+    <a href="/admin" class="active"><i class="bi bi-house-door me-2"></i> 首页数据看板</a>
+    <a href="/admin/elders"><i class="bi bi-people me-2"></i> 老人信息管理</a>
+    <a href="/admin/users"><i class="bi bi-person-badge me-2"></i> 账号权限管理</a>
+    <a href="/admin/alarms"><i class="bi bi-exclamation-triangle me-2"></i> 异常报警中心</a>
+    <a href="/admin/visits"><i class="bi bi-calendar-check me-2"></i> 探视预约管理</a>
+    <a href="/admin/messages"><i class="bi bi-chat-left-text me-2"></i> 消息管理</a>
+    <a href="/admin/family-messages"><i class="bi bi-chat-heart me-2"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag me-2"></i> 异常上报管理</a>
+    <a href="/admin/reports"><i class="bi bi-bar-chart me-2"></i> 数据统计分析</a>
+    <a href="/admin/logs"><i class="bi bi-journal-text me-2"></i> 系统日志</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 第一排：核心数字卡片 -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card text-bg-info h-100" style="border: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title mb-2">
+                                <i class="bi bi-people-fill me-2"></i>在院老人
+                            </h5>
+                            <h2 class="display-4" id="eldersCount">--</h2>
+                        </div>
+                        <div class="text-end">
+                            <i class="bi bi-people fs-1 opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-top border-white border-opacity-25">
+                        <small class="opacity-75"><i class="bi bi-house me-1"></i>温馨大家庭</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-bg-success h-100" style="border: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title mb-2">
+                                <i class="bi bi-heart-pulse me-2"></i>健康老人
+                            </h5>
+                            <h2 class="display-4" id="healthyCount">--</h2>
+                        </div>
+                        <div class="text-end">
+                            <i class="bi bi-heart-pulse fs-1 opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-top border-white border-opacity-25">
+                        <small class="opacity-75"><i class="bi bi-smile me-1"></i>状态良好</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-bg-warning h-100" style="border: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title mb-2">
+                                <i class="bi bi-exclamation-circle me-2"></i>需关注老人
+                            </h5>
+                            <h2 class="display-4" id="attentionCount">--</h2>
+                        </div>
+                        <div class="text-end">
+                            <i class="bi bi-exclamation-circle fs-1 opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-top border-white border-opacity-25">
+                        <small class="opacity-75"><i class="bi bi-eye me-1"></i>需要关注</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-bg-primary h-100" style="border: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title mb-2">
+                                <i class="bi bi-clipboard-check me-2"></i>任务完成率
+                            </h5>
+                            <h2 class="display-4" id="taskCompletionRate">--%</h2>
+                        </div>
+                        <div class="text-end">
+                            <i class="bi bi-clipboard-check fs-1 opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-top border-white border-opacity-25">
+                        <small class="opacity-75"><i class="bi bi-list-task me-1"></i>已完成 <span id="completedTasksInline">0</span>/<span id="totalTasksInline">0</span></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 第二排：高风险老人预警和今日待办 -->
+    <div class="row mb-4">
+        <!-- 高风险老人预警 -->
+        <div class="col-lg-7 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>高风险老人预警</h5>
+                </div>
+                <div class="card-body">
+                    <div id="highRiskList">
+                        <div class="text-center py-4">
+                            <i class="bi bi-hourglass-split fs-1 text-muted"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 今日待办汇总 -->
+        <div class="col-lg-5 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-list-check me-2 text-primary"></i>今日待办汇总</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group" id="todoList">
+                        <div class="text-center py-4">
+                            <i class="bi bi-hourglass-split fs-1 text-muted"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 第三排：全院运营动态时间线 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2 text-info"></i>全院运营动态</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadDashboardData()">
+                        <i class="bi bi-arrow-clockwise"></i> 刷新
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="activitiesList">
+                        <div class="text-center py-4">
+                            <i class="bi bi-hourglass-split fs-1 text-muted"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDashboardData();
+        setInterval(loadDashboardData, 3000);
+    });
+
+    function loadDashboardData() {
+        LoadingUtils.safeFetch('/api/v1/stats/admin-dashboard')
+        .then(data => {
+            if(data.code === 200) {
+                renderCoreData(data.data);
+                renderHighRiskElders(data.data.high_risk_elders);
+                renderTodoList(data.data);
+                renderActivities(data.data.recent_activities);
+            }
+        })
+        .catch(error => {
+            const errMsg = error.message || '加载失败，请刷新重试';
+            LoadingUtils.showError(document.getElementById('highRiskList'), errMsg, loadDashboardData);
+            LoadingUtils.showError(document.getElementById('todoList'), errMsg, loadDashboardData);
+            LoadingUtils.showError(document.getElementById('activitiesList'), errMsg, loadDashboardData);
+        });
+    }
+
+    function renderCoreData(data) {
+        if (window.NumberAnimation) {
+            NumberAnimation.animateValue('eldersCount', 0, data.active_elders_count || 0, { duration: 800 });
+            NumberAnimation.animateValue('healthyCount', 0, data.healthy_elders_count || 0, { duration: 800 });
+            NumberAnimation.animateValue('attentionCount', 0, data.attention_elders_count || 0, { duration: 800 });
+            NumberAnimation.animateValue('taskCompletionRate', 0, data.task_completion_rate || 0, { duration: 800, suffix: '%' });
+        } else {
+            document.getElementById('eldersCount').textContent = data.active_elders_count || 0;
+            document.getElementById('healthyCount').textContent = data.healthy_elders_count || 0;
+            document.getElementById('attentionCount').textContent = data.attention_elders_count || 0;
+            document.getElementById('taskCompletionRate').textContent = (data.task_completion_rate || 0) + '%';
+        }
+
+        if (window.AnomalyAlert && data.attention_elders_count > 0) {
+            AnomalyAlert.highlightElement('#attentionCount', { level: 'warning', pulse: true, icon: false });
+        }
+        document.getElementById('completedTasksInline').textContent = data.completed_tasks_count || 0;
+        document.getElementById('totalTasksInline').textContent = data.total_tasks_count || 0;
+    }
+
+    function renderHighRiskElders(elders) {
+        const container = document.getElementById('highRiskList');
+        if (!elders || elders.length === 0) {
+            LoadingUtils.showEmpty(container, '暂无老人数据');
+            return;
+        }
+
+        let html = '<div class="row">';
+        elders.forEach(elder => {
+            const riskColors = {
+                'high': 'danger',
+                'medium': 'warning',
+                'normal': 'success'
+            };
+            const riskBadges = {
+                'high': '<span class="badge bg-danger">高风险</span>',
+                'medium': '<span class="badge bg-warning text-dark">需关注</span>',
+                'normal': '<span class="badge bg-success">健康</span>'
+            };
+            const borderColor = 'border-' + riskColors[elder.risk_level];
+            const bgClass = elder.risk_level === 'high' ? 'border-2' : '';
+            
+            html += `
+                <div class="col-lg-6 col-md-12 mb-3">
+                    <div class="card border ${borderColor} ${bgClass}" style="${elder.risk_level === 'high' ? 'background-color: var(--danger-soft);' : ''}">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">
+                                        ${elder.name}
+                                        ${riskBadges[elder.risk_level] || ''}
+                                    </h6>
+                                    <p class="mb-1 small text-muted">
+                                        <i class="bi bi-house me-1"></i>${elder.room_number || ''}室
+                                        <span class="ms-2"><i class="bi bi-person me-1"></i>${elder.gender === 'male' ? '男' : '女'}, ${elder.age}岁</span>
+                                    </p>
+                                    ${elder.recent_alarm_count > 0 ? 
+                                        `<p class="mb-0 small text-danger"><i class="bi bi-exclamation-diamond me-1"></i>近3天报警${elder.recent_alarm_count}次</p>` 
+                                        : '<p class="mb-0 small text-success"><i class="bi bi-check-circle me-1"></i>状态稳定</p>'}
+                                </div>
+                                <div class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="viewElder(${elder.id})">
+                                        <i class="bi bi-eye"></i> 查看
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function renderTodoList(data) {
+        const container = document.getElementById('todoList');
+        const pendingVisits = data.pending_visits_count || 0;
+        const pendingAlarms = data.unhandled_alarms_count || 0;
+        const pendingTasks = data.pending_tasks_count || 0;
+        const completedTasks = data.completed_tasks_count || 0;
+        const totalTasks = data.total_tasks_count || 0;
+        const taskRate = data.task_completion_rate || 0;
+
+        container.innerHTML = `
+            <a href="/admin/visits" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-calendar-event me-2 text-primary"></i>
+                    待审批探视预约
+                </div>
+                <span class="badge bg-primary rounded-pill">${pendingVisits}</span>
+            </a>
+            <a href="/admin/alarms" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-exclamation-triangle me-2 text-warning"></i>
+                    待处理报警
+                </div>
+                <span class="badge bg-warning rounded-pill text-dark">${pendingAlarms}</span>
+            </a>
+            <a href="/admin/reports" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-list-task me-2 text-info"></i>
+                    待处理任务
+                </div>
+                <span class="badge bg-info rounded-pill text-dark">${pendingTasks}</span>
+            </a>
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <i class="bi bi-clipboard-check me-2 text-success"></i>
+                        任务完成率
+                    </div>
+                    <span class="badge bg-success rounded-pill">${taskRate}%</span>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: ${taskRate}%"></div>
+                </div>
+                <small class="text-muted">已完成 ${completedTasks} / 共 ${totalTasks} 项任务</small>
+            </div>
+        `;
+    }
+
+    function renderActivities(activities) {
+        const container = document.getElementById('activitiesList');
+        if (!activities || activities.length === 0) {
+            LoadingUtils.showEmpty(container, '暂无运营动态');
+            return;
+        }
+
+        let html = '<div class="timeline">';
+        const typeIcons = {
+            'alarm': '<i class="bi bi-exclamation-diamond text-warning"></i>',
+            'task': '<i class="bi bi-check-circle text-success"></i>',
+            'visit': '<i class="bi bi-calendar-check text-primary"></i>'
+        };
+        const typeColors = {
+            'alarm': 'warning',
+            'task': 'success',
+            'visit': 'primary'
+        };
+        const statusBadges = {
+            'unhandled': '<span class="badge bg-danger">未处理</span>',
+            'pending': '<span class="badge bg-warning text-dark">待审批</span>',
+            'approved': '<span class="badge bg-success">已批准</span>',
+            'completed': '<span class="badge bg-secondary">已完成</span>'
+        };
+
+        activities.forEach(activity => {
+            let timeStr = formatTime(activity.created_at);
+            html += `
+                <div class="timeline-item">
+                    <div class="timeline-icon border-${typeColors[activity.type] || 'secondary'}">
+                        ${typeIcons[activity.type] || '<i class="bi bi-circle text-secondary"></i>'}
+                    </div>
+                    <div class="timeline-content">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${activity.elder_name || '系统'}</strong>
+                                <div class="small text-muted">${activity.detail || ''}</div>
+                            </div>
+                            <div class="text-end">
+                                <div class="small text-muted">${timeStr}</div>
+                                ${statusBadges[activity.status] || ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function formatTime(dateStr) {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffMins < 1) return '刚刚';
+        if (diffMins < 60) return diffMins + '分钟前';
+        if (diffHours < 24) return diffHours + '小时前';
+        if (diffDays < 7) return diffDays + '天前';
+        return date.toLocaleDateString('zh-CN');
+    }
+
+    function viewElder(elderId) {
+        window.location.href = '/admin/alarms?elder_id=' + elderId;
+    }
+</script>
+
+<style>
+.timeline {
+    padding-left: 20px;
+    border-left: 2px solid var(--border-light);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-icon {
+    position: absolute;
+    left: -32px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid;
+    background: var(--bg-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.timeline-content {
+    background: var(--bg-hover);
+    padding: 12px var(--space-md);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+}
+</style>
+{% endblock %}

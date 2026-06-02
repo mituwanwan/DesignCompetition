@@ -1,0 +1,760 @@
+{% extends "base.html" %}
+
+{% block title %}健康数据 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}健康数据{% endblock %}
+
+{% block sidebar %}
+    <a href="/family"><i class="bi bi-house-door"></i> 老人信息</a>
+    <a href="/family/health" class="active"><i class="bi bi-heart-pulse"></i> 健康数据</a>
+    <a href="/family/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/family/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/family/alarms"><i class="bi bi-exclamation-triangle"></i> 系统报警 <span class="badge bg-danger sidebar-alarm-badge" id="alarmNavBadge" style="display:none">0</span></a>
+    <a href="/family/video-visit"><i class="bi bi-camera-video"></i> 视频探视</a>
+    <a href="/family/appointment"><i class="bi bi-calendar-event"></i> 预约探望</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="mb-3"><i class="bi bi-people"></i> 已绑定老人</h6>
+                    <div class="btn-group w-100" role="group" id="elderTabs">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="contentArea">
+    </div>
+</div>
+
+<div class="modal fade" id="chartZoomModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="chartZoomTitle">图表放大查看</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="chartZoomBody" style="height:500px; min-height:300px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="exportChartBtn"><i class="bi bi-download me-1"></i>导出图片</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var boundElders = [];
+    var currentElderId = null;
+    var currentPage = 1;
+    var pageSize = 20;
+    var dayRange = 30;
+    var allRecords = [];
+    var pendingElderId = null;
+
+    var NORMAL_RANGES = {
+        temperature: { min: 36, max: 37.3, label: '体温', unit: '°C' },
+        heart_rate: { min: 60, max: 100, label: '心率', unit: 'bpm' },
+        systolic_pressure: { min: 90, max: 140, label: '收缩压', unit: 'mmHg' },
+        diastolic_pressure: { min: 60, max: 90, label: '舒张压', unit: 'mmHg' },
+        blood_sugar: { min: 3.9, max: 11.1, label: '血糖', unit: 'mmol/L' }
+    };
+
+    var SLEEP_QUALITY_MAP = { poor: 1, average: 2, good: 3 };
+    var SLEEP_QUALITY_LABELS = { poor: '较差', average: '一般', good: '良好' };
+    var EMOTION_LABELS = { happy: '愉快', calm: '平静', low: '低落', agitated: '烦躁' };
+    var EMOTION_COLORS = { happy: '#68A357', calm: '#5B8DB8', low: '#E5A954', agitated: '#C96161' };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var urlParams = new URLSearchParams(window.location.search);
+        var elderIdFromUrl = urlParams.get('elder_id');
+        if (elderIdFromUrl) {
+            pendingElderId = parseInt(elderIdFromUrl);
+        }
+        loadBoundElders();
+    });
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function loadBoundElders() {
+        LoadingUtils.safeFetch('/api/v1/family/elders').then(function(data) {
+            if (data.code === 200) {
+                boundElders = data.data || [];
+                renderElderTabs();
+                if (boundElders.length > 0) {
+                    if (pendingElderId) {
+                        var found = boundElders.find(function(e) { return e.id === pendingElderId; });
+                        if (found) {
+                            selectElder(pendingElderId);
+                        } else {
+                            selectElder(boundElders[0].id);
+                        }
+                        pendingElderId = null;
+                    } else if (!currentElderId) {
+                        selectElder(boundElders[0].id);
+                    }
+                }
+            }
+        }).catch(function(error) {
+            var container = document.getElementById('elderTabs');
+            LoadingUtils.showError(container, error.message || '加载绑定老人失败，请刷新重试', loadBoundElders);
+        });
+    }
+
+    function renderElderTabs() {
+        var container = document.getElementById('elderTabs');
+        if (boundElders.length === 0) {
+            LoadingUtils.showEmpty(container, '暂未绑定任何老人，请联系管理员');
+            return;
+        }
+        var html = '';
+        boundElders.forEach(function(elder) {
+            var isActive = currentElderId === elder.id;
+            html += '<button type="button" class="btn ' + (isActive ? 'btn-primary' : 'btn-outline-primary') + '" data-elder-id="' + elder.id + '" onclick="selectElder(' + elder.id + ')">' +
+                '<i class="bi bi-person-circle me-1"></i>' + escapeHtml(elder.name) +
+            '</button>';
+        });
+        container.innerHTML = html;
+    }
+
+    function selectElder(elderId) {
+        currentElderId = elderId;
+        currentPage = 1;
+        allRecords = [];
+        renderElderTabs();
+        renderContent();
+        loadData();
+        loadRecords(1);
+    }
+
+    function renderContent() {
+        var container = document.getElementById('contentArea');
+        container.innerHTML = '' +
+            '<div class="row mb-3">' +
+                '<div class="col-md-6">' +
+                    '<h5 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>健康趋势图表</h5>' +
+                '</div>' +
+                '<div class="col-md-6 text-end">' +
+                    '<div class="btn-group me-2" role="group">' +
+                        '<button class="btn btn-outline-secondary btn-sm" data-range="7" onclick="changeRange(7)">近7天</button>' +
+                        '<button class="btn btn-outline-secondary btn-sm active" data-range="30" onclick="changeRange(30)">近30天</button>' +
+                        '<button class="btn btn-outline-secondary btn-sm" data-range="90" onclick="changeRange(90)">近90天</button>' +
+                    '</div>' +
+                    '<button class="btn btn-outline-success btn-sm" onclick="exportAllCharts()"><i class="bi bi-download me-1"></i>导出全部图表</button>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="row mb-4">' +
+                '<div class="col-md-6 mb-3">' +
+                    '<div class="card">' +
+                        '<div class="card-header d-flex justify-content-between align-items-center">' +
+                            '<h6 class="mb-0"><i class="bi bi-thermometer-half me-2"></i>体温趋势</h6>' +
+                            '<button class="btn btn-sm btn-outline-secondary" onclick="zoomChart(\'temperatureChart\', \'体温趋势\')"><i class="bi bi-zoom-in"></i></button>' +
+                        '</div>' +
+                        '<div class="card-body"><div id="temperatureChart" style="height:300px;"></div></div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="col-md-6 mb-3">' +
+                    '<div class="card">' +
+                        '<div class="card-header d-flex justify-content-between align-items-center">' +
+                            '<h6 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>心率趋势</h6>' +
+                            '<button class="btn btn-sm btn-outline-secondary" onclick="zoomChart(\'heartRateChart\', \'心率趋势\')"><i class="bi bi-zoom-in"></i></button>' +
+                        '</div>' +
+                        '<div class="card-body"><div id="heartRateChart" style="height:300px;"></div></div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="row mb-4">' +
+                '<div class="col-md-6 mb-3">' +
+                    '<div class="card">' +
+                        '<div class="card-header d-flex justify-content-between align-items-center">' +
+                            '<h6 class="mb-0"><i class="bi bi-droplet-half me-2"></i>血压趋势</h6>' +
+                            '<button class="btn btn-sm btn-outline-secondary" onclick="zoomChart(\'bloodPressureChart\', \'血压趋势\')"><i class="bi bi-zoom-in"></i></button>' +
+                        '</div>' +
+                        '<div class="card-body"><div id="bloodPressureChart" style="height:300px;"></div></div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="col-md-6 mb-3">' +
+                    '<div class="card">' +
+                        '<div class="card-header d-flex justify-content-between align-items-center">' +
+                            '<h6 class="mb-0"><i class="bi bi-heart me-2"></i>血糖趋势</h6>' +
+                            '<button class="btn btn-sm btn-outline-secondary" onclick="zoomChart(\'bloodSugarChart\', \'血糖趋势\')"><i class="bi bi-zoom-in"></i></button>' +
+                        '</div>' +
+                        '<div class="card-body"><div id="bloodSugarChart" style="height:300px;"></div></div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="row mb-4">' +
+                '<div class="col-md-6 mb-3">' +
+                    '<div class="card">' +
+                        '<div class="card-header d-flex justify-content-between align-items-center">' +
+                            '<h6 class="mb-0"><i class="bi bi-moon-stars me-2"></i>睡眠质量趋势</h6>' +
+                            '<button class="btn btn-sm btn-outline-secondary" onclick="zoomChart(\'sleepChart\', \'睡眠质量趋势\')"><i class="bi bi-zoom-in"></i></button>' +
+                        '</div>' +
+                        '<div class="card-body"><div id="sleepChart" style="height:300px;"></div></div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="col-md-6 mb-3">' +
+                    '<div class="card">' +
+                        '<div class="card-header d-flex justify-content-between align-items-center">' +
+                            '<h6 class="mb-0"><i class="bi bi-emoji-smile me-2"></i>情绪状态分布</h6>' +
+                            '<button class="btn btn-sm btn-outline-secondary" onclick="zoomChart(\'emotionChart\', \'情绪状态分布\')"><i class="bi bi-zoom-in"></i></button>' +
+                        '</div>' +
+                        '<div class="card-body"><div id="emotionChart" style="height:300px;"></div></div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div class="card">' +
+                '<div class="card-header d-flex justify-content-between align-items-center">' +
+                    '<h6 class="mb-0"><i class="bi bi-table me-2"></i>健康记录明细</h6>' +
+                    '<span class="text-muted small" id="recordsPaginationInfo"></span>' +
+                '</div>' +
+                '<div class="card-body">' +
+                    '<div class="table-responsive">' +
+                        '<table class="table table-hover table-sm">' +
+                            '<thead class="table-light">' +
+                                '<tr>' +
+                                    '<th>日期</th>' +
+                                    '<th>体温</th>' +
+                                    '<th>心率</th>' +
+                                    '<th>收缩压</th>' +
+                                    '<th>舒张压</th>' +
+                                    '<th>血糖</th>' +
+                                    '<th>睡眠</th>' +
+                                    '<th>情绪</th>' +
+                                    '<th>护工</th>' +
+                                '</tr>' +
+                            '</thead>' +
+                            '<tbody id="recordsTableBody">' +
+                                '<tr><td colspan="9" class="text-center text-muted">暂无数据</td></tr>' +
+                            '</tbody>' +
+                        '</table>' +
+                    '</div>' +
+                    '<nav><ul class="pagination pagination-sm justify-content-center" id="recordsPaginationNav"></ul></nav>' +
+                '</div>' +
+            '</div>';
+    }
+
+    function changeRange(range) {
+        dayRange = range;
+        document.querySelectorAll('[data-range]').forEach(function(btn) {
+            btn.classList.remove('active');
+            if (parseInt(btn.dataset.range) === range) {
+                btn.classList.add('active');
+            }
+        });
+        if (currentElderId) loadData();
+    }
+
+    function loadData() {
+        if (!currentElderId) return;
+
+        LoadingUtils.safeFetch('/api/v1/family/elders/' + currentElderId + '/health?page=1&page_size=100')
+            .then(function(data) {
+                if (data.code === 200) {
+                    allRecords = data.data.list || [];
+                    buildCharts(filterByRange(allRecords));
+                }
+            })
+            .catch(function(error) {
+                showToast(error.message || '加载健康数据失败，请刷新重试', 'danger');
+            });
+    }
+
+    function filterByRange(records) {
+        if (!records || records.length === 0) return [];
+        var now = new Date();
+        var cutoff = new Date(now.getTime() - dayRange * 24 * 60 * 60 * 1000);
+        return records.filter(function(r) {
+            if (!r.record_date) return false;
+            var d = new Date(r.record_date);
+            return d >= cutoff;
+        });
+    }
+
+    function normalizeDate(dateStr) {
+        if (!dateStr) return '';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+        var d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+
+    function parseHealthData(record) {
+        var h = record.health_data;
+        if (!h) return {};
+        if (typeof h === 'string') {
+            try { return JSON.parse(h); } catch (e) { return {}; }
+        }
+        return h;
+    }
+
+    function parseSleepData(record) {
+        var s = record.sleep;
+        if (!s) return {};
+        if (typeof s === 'string') {
+            try { return JSON.parse(s); } catch (e) { return {}; }
+        }
+        return s;
+    }
+
+    function parseEmotionData(record) {
+        var e = record.emotion;
+        if (!e) return {};
+        if (typeof e === 'string') {
+            try { return JSON.parse(e); } catch (err) { return {}; }
+        }
+        return e;
+    }
+
+    function isAbnormal(field, value) {
+        if (value === null || value === undefined) return false;
+        var range = NORMAL_RANGES[field];
+        if (!range) return false;
+        return value < range.min || value > range.max;
+    }
+
+    function buildCharts(records) {
+        var sorted = records.slice().sort(function(a, b) {
+            return new Date(a.record_date) - new Date(b.record_date);
+        });
+
+        var dates = sorted.map(function(r) { return normalizeDate(r.record_date); });
+        var healthData = sorted.map(parseHealthData);
+        var sleepData = sorted.map(parseSleepData);
+        var emotionData = sorted.map(parseEmotionData);
+
+        buildTemperatureChart(dates, healthData);
+        buildHeartRateChart(dates, healthData);
+        buildBloodPressureChart(dates, healthData);
+        buildBloodSugarChart(dates, healthData);
+        buildSleepChart(dates, sleepData);
+        buildEmotionChart(emotionData);
+
+        if (window.AnomalyAlert) {
+            var latestHealth = healthData.length > 0 ? healthData[healthData.length - 1] : null;
+            if (latestHealth) {
+                var anomalies = AnomalyAlert.checkHealthData({
+                    temperature: latestHealth.temperature,
+                    heart_rate: latestHealth.heart_rate,
+                    systolic_pressure: latestHealth.systolic_pressure,
+                    diastolic_pressure: latestHealth.diastolic_pressure,
+                    blood_sugar: latestHealth.blood_sugar
+                });
+                if (anomalies.length > 0) {
+                    var alertHtml = '<div class="alert alert-danger mb-3" style="border-radius:var(--radius-lg);border:none;border-left:4px solid var(--danger);">';
+                    alertHtml += '<i class="bi bi-exclamation-triangle-fill me-2"></i><strong>健康异常提醒</strong><br>';
+                    anomalies.forEach(function(a) {
+                        alertHtml += '<span class="anomaly-badge anomaly-badge-' + a.level + ' me-2 mb-1">';
+                        alertHtml += '<i class="bi bi-' + (a.level === 'danger' ? 'exclamation-triangle' : 'exclamation-circle') + '"></i>';
+                        alertHtml += a.name + ' ' + a.direction + ' (' + a.value + a.unit + '，正常范围 ' + a.normalRange + a.unit + ')';
+                        alertHtml += '</span>';
+                    });
+                    alertHtml += '</div>';
+                    var chartArea = document.querySelector('.tab-pane.active');
+                    if (chartArea) {
+                        chartArea.insertAdjacentHTML('afterbegin', alertHtml);
+                    }
+                }
+            }
+        }
+    }
+
+    function getBaseLayout(title, yTitle) {
+        if (window.ChartUtils) {
+            return ChartUtils.getBaseLayout({title: title, yTitle: yTitle, height: 300, xaxisType: 'date'});
+        }
+        return {
+            title: { text: title || '', font: { size: 14, color: '#4A4540' } },
+            margin: { t: title ? 40 : 30, r: 30, b: 55, l: 60 },
+            height: 300,
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { size: 11, color: '#6B635A' },
+            xaxis: {
+                title: '',
+                tickformat: '%m-%d',
+                tickangle: -30,
+                type: 'date',
+                tickfont: { size: 10, color: '#BAB3AA' },
+                gridcolor: 'rgba(229, 223, 213, 0.5)'
+            },
+            yaxis: { title: yTitle, gridcolor: 'rgba(229, 223, 213, 0.5)', tickfont: { size: 10, color: '#BAB3AA' } },
+            legend: { orientation: 'h', y: -0.22, x: 0.5, xanchor: 'center', font: { size: 11, color: '#6B635A' } },
+            hovermode: 'x unified'
+        };
+    }
+
+    function getPlotConfig() {
+        if (window.ChartUtils) return ChartUtils.getConfig();
+        return {
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
+            displaylogo: false,
+            responsive: true,
+            scrollZoom: true
+        };
+    }
+
+    function buildTemperatureChart(dates, healthData) {
+        var values = healthData.map(function(h) { return h.temperature || null; });
+        var normalY = values.map(function(v) { return (v !== null && !isAbnormal('temperature', v)) ? v : null; });
+        var abnormalY = values.map(function(v) { return (v !== null && isAbnormal('temperature', v)) ? v : null; });
+
+        var traces;
+        if (window.ChartUtils) {
+            traces = [
+                ChartUtils.makeLineTrace({x: dates, y: normalY, name: '体温(正常)', color: '#5B8DB8', hoverTemplate: '%{x}<br>体温: %{y:.1f}°C<extra></extra>'}),
+                ChartUtils.makeAbnormalMarkerTrace({x: dates, y: abnormalY, name: '体温(异常)', color: '#C96161', unit: '°C'})
+            ];
+        } else {
+            traces = [
+                {x: dates, y: normalY, name: '体温(正常)', mode: 'lines+markers', connectgaps: false, line: {color: '#5B8DB8', width: 2}, marker: {size: 6, color: '#5B8DB8'}},
+                {x: dates, y: abnormalY, name: '体温(异常)', mode: 'markers', connectgaps: false, marker: {size: 10, color: '#C96161', symbol: 'x', line: {width: 2, color: '#C96161'}}}
+            ];
+        }
+
+        var layout = getBaseLayout('体温趋势', '°C');
+        layout.yaxis.range = [34, 43];
+        layout.shapes = [
+            ChartUtils ? ChartUtils.makeNormalRange(36, 37.3) : {type: 'rect', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: 36, y1: 37.3, fillcolor: 'rgba(104, 163, 87, 0.08)', line: {width: 0}}
+        ];
+
+        Plotly.newPlot('temperatureChart', traces, layout, getPlotConfig());
+    }
+
+    function buildHeartRateChart(dates, healthData) {
+        var values = healthData.map(function(h) { return h.heart_rate || null; });
+        var normalY = values.map(function(v) { return (v !== null && !isAbnormal('heart_rate', v)) ? v : null; });
+        var abnormalY = values.map(function(v) { return (v !== null && isAbnormal('heart_rate', v)) ? v : null; });
+
+        var traces = [
+            {
+                x: dates, y: normalY, name: '心率(正常)',
+                mode: 'lines+markers', connectgaps: false,
+                line: { color: '#8B7DB8', width: 2 },
+                marker: { size: 6, color: '#8B7DB8' }
+            },
+            {
+                x: dates, y: abnormalY, name: '心率(异常)',
+                mode: 'markers', connectgaps: false,
+                marker: { size: 10, color: '#C96161', symbol: 'x', line: { width: 2, color: '#C96161' } }
+            }
+        ];
+
+        var layout = getBaseLayout('心率趋势', 'bpm');
+        layout.yaxis.range = [30, 210];
+        layout.shapes = [
+            { type: 'rect', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: 60, y1: 100, fillcolor: 'rgba(46,204,113,0.08)', line: { width: 0 } }
+        ];
+
+        Plotly.newPlot('heartRateChart', traces, layout, getPlotConfig());
+    }
+
+    function buildBloodPressureChart(dates, healthData) {
+        var sysValues = healthData.map(function(h) { return h.systolic_pressure || null; });
+        var diaValues = healthData.map(function(h) { return h.diastolic_pressure || null; });
+
+        var sysNormal = sysValues.map(function(v) { return (v !== null && !isAbnormal('systolic_pressure', v)) ? v : null; });
+        var sysAbnormal = sysValues.map(function(v) { return (v !== null && isAbnormal('systolic_pressure', v)) ? v : null; });
+        var diaNormal = diaValues.map(function(v) { return (v !== null && !isAbnormal('diastolic_pressure', v)) ? v : null; });
+        var diaAbnormal = diaValues.map(function(v) { return (v !== null && isAbnormal('diastolic_pressure', v)) ? v : null; });
+
+        var traces = [
+            {
+                x: dates, y: sysNormal, name: '收缩压(正常)',
+                mode: 'lines+markers', connectgaps: false,
+                line: { color: '#C96161', width: 2 },
+                marker: { size: 6, color: '#C96161' }
+            },
+            {
+                x: dates, y: sysAbnormal, name: '收缩压(异常)',
+                mode: 'markers', connectgaps: false,
+                marker: { size: 10, color: '#C96161', symbol: 'x', line: { width: 2, color: '#B85050' } }
+            },
+            {
+                x: dates, y: diaNormal, name: '舒张压(正常)',
+                mode: 'lines+markers', connectgaps: false,
+                line: { color: '#5B8DB8', width: 2 },
+                marker: { size: 6, color: '#5B8DB8' }
+            },
+            {
+                x: dates, y: diaAbnormal, name: '舒张压(异常)',
+                mode: 'markers', connectgaps: false,
+                marker: { size: 10, color: '#4A7DA8', symbol: 'x', line: { width: 2, color: '#3A6D98' } }
+            }
+        ];
+
+        var layout = getBaseLayout('血压趋势', 'mmHg');
+        layout.shapes = [
+            { type: 'rect', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: 60, y1: 90, fillcolor: 'rgba(52,152,219,0.06)', line: { width: 0 } },
+            { type: 'rect', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: 90, y1: 140, fillcolor: 'rgba(231,76,60,0.06)', line: { width: 0 } }
+        ];
+
+        Plotly.newPlot('bloodPressureChart', traces, layout, getPlotConfig());
+    }
+
+    function buildBloodSugarChart(dates, healthData) {
+        var values = healthData.map(function(h) { return h.blood_sugar || null; });
+        var normalY = values.map(function(v) { return (v !== null && !isAbnormal('blood_sugar', v)) ? v : null; });
+        var abnormalY = values.map(function(v) { return (v !== null && isAbnormal('blood_sugar', v)) ? v : null; });
+
+        var traces = [
+            {
+                x: dates, y: normalY, name: '血糖(正常)',
+                mode: 'lines+markers', connectgaps: false,
+                line: { color: '#E5A954', width: 2 },
+                marker: { size: 6, color: '#E5A954' }
+            },
+            {
+                x: dates, y: abnormalY, name: '血糖(异常)',
+                mode: 'markers', connectgaps: false,
+                marker: { size: 10, color: '#C96161', symbol: 'x', line: { width: 2, color: '#C96161' } }
+            }
+        ];
+
+        var layout = getBaseLayout('血糖趋势', 'mmol/L');
+        layout.yaxis.range = [0, 30];
+        layout.shapes = [
+            { type: 'rect', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: 3.9, y1: 11.1, fillcolor: 'rgba(46,204,113,0.08)', line: { width: 0 } }
+        ];
+
+        Plotly.newPlot('bloodSugarChart', traces, layout, getPlotConfig());
+    }
+
+    function buildSleepChart(dates, sleepData) {
+        var sleepHours = sleepData.map(function(s) { return s.duration || null; });
+        var qualityValues = sleepData.map(function(s) {
+            if (!s.quality) return null;
+            return SLEEP_QUALITY_MAP[s.quality] || null;
+        });
+        var qualityLabels = sleepData.map(function(s) {
+            if (!s.quality) return '';
+            return SLEEP_QUALITY_LABELS[s.quality] || '';
+        });
+
+        var barColors = sleepData.map(function(s) {
+            if (!s.duration) return '#5B8DB8';
+            if (s.duration < 5) return '#C96161';
+            if (s.duration < 7) return '#E5A954';
+            return '#68A357';
+        });
+
+        var traces = [
+            {
+                x: dates, y: sleepHours, name: '睡眠时长(小时)',
+                type: 'bar', marker: { color: barColors },
+                text: sleepHours.map(function(h) { return h !== null ? h + '小时' : ''; }),
+                textposition: 'auto',
+                textfont: { size: 9 }
+            },
+            {
+                x: dates, y: qualityValues, name: '睡眠质量',
+                yaxis: 'y2', type: 'scatter', mode: 'lines+markers',
+                line: { color: '#68A357', width: 2 },
+                marker: { size: 8, color: '#68A357' },
+                text: qualityLabels,
+                hovertemplate: '%{text}<extra></extra>'
+            }
+        ];
+
+        var layout = getBaseLayout('睡眠质量', '小时');
+        layout.yaxis2 = {
+            title: '质量', side: 'right', overlaying: 'y',
+            range: [0, 3.5],
+            ticktext: ['', '较差', '一般', '良好'],
+            tickvals: [0, 1, 2, 3]
+        };
+
+        Plotly.newPlot('sleepChart', traces, layout, getPlotConfig());
+    }
+
+    function buildEmotionChart(emotionData) {
+        var emotionCounts = { happy: 0, calm: 0, low: 0, agitated: 0 };
+        emotionData.forEach(function(e) {
+            if (e && e.status && emotionCounts.hasOwnProperty(e.status)) {
+                emotionCounts[e.status]++;
+            }
+        });
+
+        var labels = [];
+        var values = [];
+        var colors = [];
+        var total = 0;
+
+        Object.keys(EMOTION_LABELS).forEach(function(key) {
+            if (emotionCounts[key] > 0) {
+                labels.push(EMOTION_LABELS[key]);
+                values.push(emotionCounts[key]);
+                colors.push(EMOTION_COLORS[key]);
+                total += emotionCounts[key];
+            }
+        });
+
+        if (total === 0) {
+            labels = ['愉快', '平静', '低落', '烦躁'];
+            values = [0, 0, 0, 0];
+            colors = ['#68A357', '#5B8DB8', '#E5A954', '#C96161'];
+        }
+
+        var traces;
+        if (window.ChartUtils) {
+            traces = [ChartUtils.makePieTrace({labels: labels, values: values, colors: colors, hole: 0.35, textInfo: 'label+percent'})];
+        } else {
+            traces = [{labels: labels, values: values, type: 'pie', marker: {colors: colors}, textinfo: 'label+percent', textposition: 'inside', hole: 0.35, hoverinfo: 'label+value+percent'}];
+        }
+
+        var layout;
+        if (window.ChartUtils) {
+            layout = ChartUtils.getBaseLayout({title: '情绪状态分布', height: 300});
+            layout.margin = { t: 40, r: 20, b: 20, l: 20 };
+        } else {
+            layout = {margin: {t: 20, r: 20, b: 20, l: 20}, height: 300, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', showlegend: true, legend: {orientation: 'h', y: -0.1}};
+        }
+
+        Plotly.newPlot('emotionChart', traces, layout, getPlotConfig());
+    }
+
+    function zoomChart(chartId, title) {
+        var chartDiv = document.getElementById(chartId);
+        if (!chartDiv) return;
+
+        var data = chartDiv.data;
+        var layout = chartDiv.layout;
+
+        var zoomLayout = JSON.parse(JSON.stringify(layout));
+        zoomLayout.height = 480;
+        zoomLayout.margin = { t: 40, r: 40, b: 60, l: 60 };
+        zoomLayout.title = { text: title, font: { size: 16 } };
+
+        Plotly.newPlot('chartZoomBody', data, zoomLayout, getPlotConfig());
+
+        document.getElementById('chartZoomTitle').textContent = title;
+        var modal = new bootstrap.Modal(document.getElementById('chartZoomModal'));
+        modal.show();
+
+        document.getElementById('exportChartBtn').onclick = function() {
+            Plotly.downloadImage('chartZoomBody', {
+                format: 'png',
+                width: 1200,
+                height: 600,
+                filename: title + '_' + new Date().toISOString().slice(0, 10)
+            });
+        };
+    }
+
+    function exportAllCharts() {
+        var chartIds = ['temperatureChart', 'heartRateChart', 'bloodPressureChart', 'bloodSugarChart', 'sleepChart', 'emotionChart'];
+        var names = ['体温趋势', '心率趋势', '血压趋势', '血糖趋势', '睡眠质量', '情绪状态'];
+
+        chartIds.forEach(function(id, index) {
+            var chartDiv = document.getElementById(id);
+            if (chartDiv && chartDiv.data) {
+                setTimeout(function() {
+                    Plotly.downloadImage(id, {
+                        format: 'png',
+                        width: 800,
+                        height: 400,
+                        filename: names[index] + '_' + new Date().toISOString().slice(0, 10)
+                    });
+                }, index * 500);
+            }
+        });
+
+        showToast('正在导出图表，请稍候...', 'info');
+    }
+
+    function loadRecords(page) {
+        if (!currentElderId) return;
+
+        currentPage = page;
+        LoadingUtils.safeFetch('/api/v1/family/elders/' + currentElderId + '/health?page=' + page + '&page_size=' + pageSize)
+            .then(function(data) {
+                if (data.code === 200) {
+                    var records = data.data.list || [];
+                    var tbody = document.getElementById('recordsTableBody');
+                    if (!tbody) return;
+
+                    if (records.length === 0) {
+                        LoadingUtils.showEmpty(tbody, '暂无记录');
+                    } else {
+                        tbody.innerHTML = records.map(function(r) {
+                            var h = parseHealthData(r);
+                            var s = parseSleepData(r);
+                            var e = parseEmotionData(r);
+
+                            var tempHtml = h.temperature ? (isAbnormal('temperature', h.temperature) ? '<span class="text-danger fw-bold">' + h.temperature + '°C</span>' : h.temperature + '°C') : '-';
+                            var hrHtml = h.heart_rate ? (isAbnormal('heart_rate', h.heart_rate) ? '<span class="text-danger fw-bold">' + h.heart_rate + 'bpm</span>' : h.heart_rate + 'bpm') : '-';
+                            var sysHtml = h.systolic_pressure ? (isAbnormal('systolic_pressure', h.systolic_pressure) ? '<span class="text-danger fw-bold">' + h.systolic_pressure + '</span>' : h.systolic_pressure) : '-';
+                            var diaHtml = h.diastolic_pressure ? (isAbnormal('diastolic_pressure', h.diastolic_pressure) ? '<span class="text-danger fw-bold">' + h.diastolic_pressure + '</span>' : h.diastolic_pressure) : '-';
+                            var bsHtml = h.blood_sugar ? (isAbnormal('blood_sugar', h.blood_sugar) ? '<span class="text-danger fw-bold">' + h.blood_sugar + 'mmol/L</span>' : h.blood_sugar + 'mmol/L') : '-';
+                            var sleepHtml = (s.duration !== undefined && s.duration !== null) ? s.duration + 'h' + (s.quality ? '(' + (SLEEP_QUALITY_LABELS[s.quality] || s.quality) + ')' : '') : '-';
+                            var emotionHtml = e.status ? (EMOTION_LABELS[e.status] || e.status) : '-';
+
+                            return '<tr>' +
+                                '<td>' + normalizeDate(r.record_date) + '</td>' +
+                                '<td>' + tempHtml + '</td>' +
+                                '<td>' + hrHtml + '</td>' +
+                                '<td>' + sysHtml + '</td>' +
+                                '<td>' + diaHtml + '</td>' +
+                                '<td>' + bsHtml + '</td>' +
+                                '<td>' + sleepHtml + '</td>' +
+                                '<td>' + emotionHtml + '</td>' +
+                                '<td>' + escapeHtml(r.caregiver_name || '-') + '</td>' +
+                            '</tr>';
+                        }).join('');
+                    }
+                    renderPagination(data.data.pagination);
+                }
+            })
+            .catch(function(error) {
+                var tbody = document.getElementById('recordsTableBody');
+                if (tbody) LoadingUtils.showError(tbody, error.message || '加载健康记录失败，请刷新重试', function() { loadRecords(currentPage); });
+            });
+    }
+
+    function renderPagination(p) {
+        var info = document.getElementById('recordsPaginationInfo');
+        if (info) info.textContent = '共 ' + p.total + ' 条';
+
+        var html = '';
+        if (p.page > 1) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page - 1) + '">上一页</a></li>';
+        for (var i = Math.max(1, p.page - 2); i <= Math.min(p.total_pages, p.page + 2); i++) {
+            html += '<li class="page-item ' + (i === p.page ? 'active' : '') + '"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+        }
+        if (p.page < p.total_pages) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page + 1) + '">下一页</a></li>';
+
+        var nav = document.getElementById('recordsPaginationNav');
+        if (nav) {
+            nav.innerHTML = html;
+            nav.querySelectorAll('.page-link').forEach(function(el) {
+                el.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var page = parseInt(this.dataset.page);
+                    if (!isNaN(page)) loadRecords(page);
+                });
+            });
+        }
+    }
+</script>
+{% endblock %}

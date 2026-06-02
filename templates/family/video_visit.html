@@ -1,0 +1,430 @@
+{% extends "base.html" %}
+
+{% block title %}视频探视 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}视频探视{% endblock %}
+
+{% block sidebar %}
+    <a href="/family"><i class="bi bi-house-door"></i> 老人信息</a>
+    <a href="/family/health"><i class="bi bi-heart-pulse"></i> 健康数据</a>
+    <a href="/family/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/family/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/family/alarms"><i class="bi bi-exclamation-triangle"></i> 系统报警 <span class="badge bg-danger sidebar-alarm-badge" id="alarmNavBadge" style="display:none">0</span></a>
+    <a href="/family/video-visit" class="active"><i class="bi bi-camera-video"></i> 视频探视</a>
+    <a href="/family/appointment"><i class="bi bi-calendar-event"></i> 预约探望</a>
+{% endblock %}
+
+{% block content %}
+<style>
+    .visit-stats { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .visit-stat-card {
+        flex: 1; min-width: 120px; padding: 14px var(--space-md); border-radius: var(--radius-md);
+        background: var(--bg-card); border: 1px solid var(--border-light); text-align: center;
+    }
+    .visit-stat-card .stat-num { font-size: var(--fs-2xl); font-weight: 700; }
+    .visit-stat-card .stat-label { font-size: var(--fs-xs); color: var(--text-secondary); margin-top: 2px; }
+    .visit-stat-card.s-pending .stat-num { color: var(--warning); }
+    .visit-stat-card.s-approved .stat-num { color: var(--success); }
+    .visit-stat-card.s-completed .stat-num { color: var(--primary); }
+    .visit-stat-card.s-rejected .stat-num { color: var(--danger); }
+
+    .visit-card {
+        background: var(--bg-card); border-radius: var(--radius-md); padding: var(--space-md) 20px;
+        margin-bottom: 10px; border: 1px solid var(--border-light); transition: all var(--transition-fast);
+    }
+    .visit-card:hover { box-shadow: var(--shadow-sm); }
+    .visit-card.vc-pending { border-left: 4px solid var(--warning); }
+    .visit-card.vc-approved { border-left: 4px solid var(--success); }
+    .visit-card.vc-completed { border-left: 4px solid var(--primary); }
+    .visit-card.vc-cancelled { border-left: 4px solid var(--text-muted); }
+    .visit-card.vc-rejected { border-left: 4px solid var(--danger); }
+
+    .status-badge {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 12px; border-radius: 20px; font-size: var(--fs-xs); font-weight: 600;
+    }
+    .status-badge.sb-pending { background: var(--warning-soft); color: var(--warning-active); }
+    .status-badge.sb-approved { background: var(--success-soft); color: var(--success); }
+    .status-badge.sb-completed { background: var(--primary-soft); color: var(--primary); }
+    .status-badge.sb-cancelled { background: var(--bg-hover); color: var(--text-secondary); }
+    .status-badge.sb-rejected { background: var(--danger-soft); color: var(--danger); }
+
+    .video-link-box {
+        background: var(--success-soft); border: 1px solid var(--success-light); border-radius: var(--radius-md);
+        padding: 12px var(--space-md); margin-top: 10px;
+    }
+    .video-link-box .link-label { font-size: var(--fs-xs); color: var(--success); font-weight: 600; }
+    .video-link-box .link-url {
+        font-size: var(--fs-sm); color: var(--text-primary); word-break: break-all;
+        background: var(--bg-card); padding: 6px 10px; border-radius: var(--radius-sm); margin-top: 4px;
+    }
+    .video-link-box .link-hint { font-size: var(--fs-xs); color: var(--text-secondary); margin-top: 4px; }
+
+    .reject-reason-box {
+        background: var(--danger-soft); border-radius: 8px; padding: 10px 14px; margin-top: 8px;
+        font-size: var(--fs-sm); color: var(--danger-active);
+    }
+
+    .filter-bar {
+        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        margin-bottom: var(--space-md); padding: 12px var(--space-md); background: var(--bg-card);
+        border-radius: var(--radius-md); border: 1px solid var(--border-light);
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="visit-stats">
+        <div class="visit-stat-card s-pending">
+            <div class="stat-num" id="statPending">-</div>
+            <div class="stat-label">待确认</div>
+        </div>
+        <div class="visit-stat-card s-approved">
+            <div class="stat-num" id="statApproved">-</div>
+            <div class="stat-label">已批准</div>
+        </div>
+        <div class="visit-stat-card s-completed">
+            <div class="stat-num" id="statCompleted">-</div>
+            <div class="stat-label">已完成</div>
+        </div>
+        <div class="visit-stat-card s-rejected">
+            <div class="stat-num" id="statRejected">-</div>
+            <div class="stat-label">已拒绝</div>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <select class="form-select form-select-sm" id="elderFilter" style="max-width:160px">
+            <option value="">全部老人</option>
+        </select>
+        <select class="form-select form-select-sm" id="statusFilter" style="max-width:140px">
+            <option value="">全部状态</option>
+            <option value="pending">待确认</option>
+            <option value="approved">已批准</option>
+            <option value="completed">已完成</option>
+            <option value="cancelled">已取消</option>
+            <option value="rejected">已拒绝</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" id="searchBtn"><i class="bi bi-search"></i> 查询</button>
+        <button class="btn btn-sm btn-primary ms-auto" id="createVisitBtn"><i class="bi bi-plus-lg"></i> 发起视频探视</button>
+    </div>
+
+    <div id="visitList">
+        <div class="text-center py-5 text-muted"><i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>加载中...</div>
+    </div>
+
+    <div class="d-flex justify-content-center mt-3">
+        <nav><ul class="pagination pagination-sm" id="paginationNav"></ul></nav>
+    </div>
+</div>
+
+<div class="modal fade" id="visitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-camera-video me-2"></i>发起视频探视</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="visitForm">
+                    <div class="mb-3">
+                        <label class="form-label">老人 <span class="text-danger">*</span></label>
+                        <select class="form-select" id="vElderId" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">预约时间 <span class="text-danger">*</span></label>
+                        <input type="datetime-local" class="form-control" id="vDate" required>
+                        <div class="form-text">可预约时段：上午 09:00-11:00，下午 15:00-17:00</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备注</label>
+                        <textarea class="form-control" id="vNotes" rows="2" maxlength="500" placeholder="选填，如想探视的原因"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="submitVisitBtn"><i class="bi bi-send me-1"></i>提交申请</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var currentPage = 1;
+    var pageSize = 15;
+    var boundElders = [];
+    var lastVisitIds = [];
+    var refreshTimer = null;
+
+    var statusTexts = {
+        pending: '待确认', approved: '已批准', completed: '已完成',
+        cancelled: '已取消', rejected: '已拒绝'
+    };
+    var statusIcons = {
+        pending: 'bi-clock', approved: 'bi-check-circle', completed: 'bi-calendar-check',
+        cancelled: 'bi-x-circle', rejected: 'bi-slash-circle'
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadElderOptions();
+        loadVisits(1);
+        loadStats();
+        startAutoRefresh();
+
+        document.getElementById('searchBtn').addEventListener('click', function() { loadVisits(1); });
+        document.getElementById('statusFilter').addEventListener('change', function() { loadVisits(1); });
+        document.getElementById('elderFilter').addEventListener('change', function() { loadVisits(1); });
+        document.getElementById('createVisitBtn').addEventListener('click', openCreateModal);
+        document.getElementById('submitVisitBtn').addEventListener('click', createVisit);
+        document.getElementById('vDate').addEventListener('change', validateDateTime);
+    });
+
+    function startAutoRefresh() {
+        refreshTimer = setInterval(function() {
+            loadVisits(currentPage, true);
+            loadStats();
+        }, 8000);
+    }
+
+    function loadElderOptions() {
+        LoadingUtils.safeFetch('/api/v1/family/elders').then(function(data) {
+            if (data.code === 200) {
+                boundElders = data.data || [];
+                var select = document.getElementById('elderFilter');
+                var vSelect = document.getElementById('vElderId');
+                boundElders.forEach(function(e) {
+                    var opt = '<option value="' + e.id + '">' + escapeHtml(e.name) + ' (' + (e.room_number || '') + '室)</option>';
+                    select.innerHTML += opt;
+                    vSelect.innerHTML += opt;
+                });
+            }
+        }).catch(function() {});
+    }
+
+    function loadStats() {
+        ['pending', 'approved', 'completed', 'rejected'].forEach(function(status) {
+            LoadingUtils.safeFetch('/api/v1/visits?type=video&status=' + status + '&page=1&page_size=1').then(function(data) {
+                if (data.code === 200) {
+                    var elId = 'stat' + status.charAt(0).toUpperCase() + status.slice(1);
+                    document.getElementById(elId).textContent = data.data.pagination.total;
+                }
+            }).catch(function() {});
+        });
+    }
+
+    function loadVisits(page, silent) {
+        currentPage = page;
+        var status = document.getElementById('statusFilter').value;
+        var elderId = document.getElementById('elderFilter').value;
+        var url = '/api/v1/visits?type=video&page=' + page + '&page_size=' + pageSize;
+        if (status) url += '&status=' + status;
+        if (elderId) url += '&elder_id=' + elderId;
+
+        LoadingUtils.safeFetch(url).then(function(data) {
+            if (data.code === 200) {
+                renderVisits(data.data.list || []);
+                renderPagination(data.data.pagination);
+
+                var currentIds = (data.data.list || []).map(function(v) { return v.id; });
+                if (lastVisitIds.length > 0 && !silent) {
+                    var newApproved = (data.data.list || []).filter(function(v) {
+                        return lastVisitIds.indexOf(v.id) === -1 && v.status === 'approved';
+                    });
+                    if (newApproved.length > 0) {
+                        showToast('您的视频探视预约已获批准！', 'success');
+                    }
+                }
+                lastVisitIds = currentIds;
+            }
+        }).catch(function() {});
+    }
+
+    function renderVisits(visits) {
+        var container = document.getElementById('visitList');
+        if (!visits || visits.length === 0) {
+            container.innerHTML = '<div class="text-center py-5 text-muted">' +
+                '<i class="bi bi-camera-video fs-1 d-block mb-3" style="color:var(--border-light);"></i>' +
+                '<h6>暂无视频探视记录</h6>' +
+                '<p class="small">点击右上角"发起视频探视"按钮预约</p></div>';
+            return;
+        }
+
+        container.innerHTML = visits.map(function(v) {
+            var statusClass = 'sb-' + v.status;
+            var cardClass = 'vc-' + v.status;
+            var icon = statusIcons[v.status] || 'bi-circle';
+            var statusText = statusTexts[v.status] || v.status;
+
+            var videoLinkHtml = '';
+            if (v.status === 'approved' && v.video_token) {
+                var videoUrl = window.location.origin + '/family/video-room/' + v.video_token;
+                var apptDate = new Date(v.appointment_date);
+                var now = new Date();
+                var diff = (apptDate - now) / 1000;
+                var canEnter = diff <= 1800 && diff >= -3600;
+
+                videoLinkHtml = '<div class="video-link-box">' +
+                    '<div class="link-label"><i class="bi bi-link-45deg me-1"></i>视频访问链接</div>' +
+                    '<div class="link-url">' + escapeHtml(videoUrl) + '</div>' +
+                    (canEnter
+                        ? '<button class="btn btn-success btn-sm mt-2" onclick="enterVideoRoom(\'' + v.video_token + '\')"><i class="bi bi-camera-video me-1"></i>一键进入视频通话</button>'
+                        : '<div class="link-hint"><i class="bi bi-info-circle me-1"></i>请在预约时间前后30分钟内进入（预约时间：' + formatDateTime(v.appointment_date) + '）</div>'
+                    ) +
+                '</div>';
+            }
+
+            var rejectHtml = '';
+            if (v.status === 'rejected' && v.reject_reason) {
+                rejectHtml = '<div class="reject-reason-box"><i class="bi bi-info-circle me-1"></i>拒绝原因：' + escapeHtml(v.reject_reason) + '</div>';
+            }
+
+            var actionsHtml = '';
+            if (v.status === 'pending') {
+                actionsHtml = '<button class="btn btn-sm btn-outline-danger" onclick="cancelVisit(' + v.id + ')"><i class="bi bi-x-circle me-1"></i>取消预约</button>';
+            } else if (v.status === 'approved') {
+                actionsHtml = '<button class="btn btn-sm btn-outline-danger" onclick="cancelVisit(' + v.id + ')"><i class="bi bi-x-circle me-1"></i>取消预约</button>';
+            }
+
+            return '<div class="visit-card ' + cardClass + '">' +
+                '<div class="d-flex justify-content-between align-items-start">' +
+                    '<div class="flex-grow-1">' +
+                        '<div class="d-flex align-items-center gap-2 mb-1">' +
+                            '<strong style="font-size:var(--fs-md);">' + escapeHtml(v.elder_name || '') + '</strong>' +
+                            '<span class="badge bg-light text-dark" style="font-size:var(--fs-xs);">' + (v.room_number || '') + '室</span>' +
+                        '</div>' +
+                        '<div class="text-muted" style="font-size:var(--fs-sm);">' +
+                            '<i class="bi bi-calendar3 me-1"></i>' + formatDateTime(v.appointment_date) +
+                        '</div>' +
+                        (v.notes ? '<div class="text-muted mt-1" style="font-size:var(--fs-sm);"><i class="bi bi-chat-left-text me-1"></i>' + escapeHtml(v.notes) + '</div>' : '') +
+                    '</div>' +
+                    '<div class="text-end">' +
+                        '<span class="status-badge ' + statusClass + '"><i class="bi ' + icon + '"></i> ' + statusText + '</span>' +
+                        '<div class="text-muted mt-1" style="font-size:var(--fs-xs);">提交于 ' + formatDateTime(v.created_at) + '</div>' +
+                    '</div>' +
+                '</div>' +
+                videoLinkHtml +
+                rejectHtml +
+                (actionsHtml ? '<div class="mt-2">' + actionsHtml + '</div>' : '') +
+            '</div>';
+        }).join('');
+    }
+
+    function renderPagination(p) {
+        var html = '';
+        if (p.page > 1) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page - 1) + '">上一页</a></li>';
+        for (var i = Math.max(1, p.page - 2); i <= Math.min(p.total_pages, p.page + 2); i++) {
+            html += '<li class="page-item ' + (i === p.page ? 'active' : '') + '"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+        }
+        if (p.page < p.total_pages) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page + 1) + '">下一页</a></li>';
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav a').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                var pg = parseInt(this.dataset.page);
+                if (!isNaN(pg)) loadVisits(pg);
+            });
+        });
+    }
+
+    function openCreateModal() {
+        document.getElementById('vElderId').value = '';
+        document.getElementById('vDate').value = '';
+        document.getElementById('vNotes').value = '';
+
+        var now = new Date();
+        now.setMinutes(now.getMinutes() + 30);
+        now.setMinutes(0);
+        document.getElementById('vDate').min = now.toISOString().slice(0, 16);
+
+        new bootstrap.Modal(document.getElementById('visitModal')).show();
+    }
+
+    function validateDateTime() {
+        var dateVal = document.getElementById('vDate').value;
+        if (!dateVal) return;
+
+        var dt = new Date(dateVal);
+        var dayOfWeek = dt.getDay();
+        var hours = dt.getHours();
+        var minutes = dt.getMinutes();
+        var timeStr = (hours < 10 ? '0' : '') + hours + ':' + (minutes < 10 ? '0' : '') + minutes;
+
+        var isValid = (timeStr >= '09:00' && timeStr < '11:00') || (timeStr >= '15:00' && timeStr < '17:00');
+        if (!isValid) {
+            showToast('请在可预约时段内选择时间：上午 09:00-11:00，下午 15:00-17:00', 'warning');
+            document.getElementById('vDate').value = '';
+        }
+
+        if (dt < new Date()) {
+            showToast('预约时间不能早于当前时间', 'warning');
+            document.getElementById('vDate').value = '';
+        }
+    }
+
+    function createVisit() {
+        var elderId = document.getElementById('vElderId').value;
+        var date = document.getElementById('vDate').value;
+        var notes = document.getElementById('vNotes').value.trim();
+
+        if (!elderId) { showToast('请选择老人', 'warning'); return; }
+        if (!date) { showToast('请选择预约时间', 'warning'); return; }
+
+        var btn = document.getElementById('submitVisitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>提交中...';
+
+        LoadingUtils.safeFetch('/api/v1/visits', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ elder_id: parseInt(elderId), type: 'video', appointment_date: date, notes: notes })
+        }).then(function(data) {
+            if (data.code === 200) {
+                showToast('视频探视申请已提交，请等待管理员审批', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('visitModal')).hide();
+                loadVisits(1);
+                loadStats();
+            } else {
+                showToast(data.msg || '提交失败', 'danger');
+            }
+        }).catch(function(err) {
+            showToast(err.message || '操作失败，请重试', 'danger');
+        }).finally(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send me-1"></i>提交申请';
+        });
+    }
+
+    function cancelVisit(id) {
+        if (!confirm('确定取消此视频探视预约吗？取消后需重新预约。')) return;
+        LoadingUtils.safeFetch('/api/v1/visits/' + id + '/cancel', { method: 'PUT' })
+            .then(function(data) {
+                if (data.code === 200) {
+                    showToast('预约已取消', 'success');
+                    loadVisits(currentPage);
+                    loadStats();
+                } else {
+                    showToast(data.msg || '取消失败', 'danger');
+                }
+            }).catch(function(err) { showToast(err.message || '操作失败', 'danger'); });
+    }
+
+    function enterVideoRoom(token) {
+        window.open('/family/video-room/' + token, '_blank', 'width=1000,height=700');
+    }
+
+    function formatDateTime(dateStr) {
+        if (!dateStr) return '-';
+        var d = new Date(dateStr);
+        var pad = function(n) { return n < 10 ? '0' + n : n; };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+</script>
+{% endblock %}

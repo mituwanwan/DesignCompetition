@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}老人信息管理 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}老人信息管理{% endblock %}
+
+{% block sidebar %}
+    <!-- 管理员侧边栏菜单 -->
+    <a href="/admin"><i class="bi bi-house-door me-2"></i> 首页数据看板</a>
+    <a href="/admin/elders" class="active"><i class="bi bi-people me-2"></i> 老人信息管理</a>
+    <a href="/admin/users"><i class="bi bi-person-badge me-2"></i> 账号权限管理</a>
+    <a href="/admin/alarms"><i class="bi bi-exclamation-triangle me-2"></i> 异常报警中心</a>
+    <a href="/admin/visits"><i class="bi bi-calendar-check me-2"></i> 探视预约管理</a>
+    <a href="/admin/messages"><i class="bi bi-chat-left-text me-2"></i> 消息管理</a>
+    <a href="/admin/family-messages"><i class="bi bi-chat-heart me-2"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag me-2"></i> 异常上报管理</a>
+    <a href="/admin/reports"><i class="bi bi-bar-chart me-2"></i> 数据统计分析</a>
+    <a href="/admin/logs"><i class="bi bi-journal-text me-2"></i> 系统日志</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-action-btn { padding: 0.25rem 0.5rem; font-size: var(--fs-sm); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3 align-items-center">
+        <div class="col-md-8">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <input type="text" class="form-control" id="searchName" placeholder="姓名">
+                </div>
+                <div class="col-md-4">
+                    <input type="text" class="form-control" id="searchRoom" placeholder="房间号">
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="searchStatus">
+                        <option value="">全部状态</option>
+                        <option value="active">在院</option>
+                        <option value="discharged">已出院</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-outline-primary w-100" id="searchBtn" type="button"><i class="bi bi-search"></i></button>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 text-end">
+            <button class="btn btn-success me-2" id="exportBtn"><i class="bi bi-file-earmark-excel"></i> 导出Excel</button>
+            <button class="btn btn-primary" id="addElderBtn"><i class="bi bi-plus-lg"></i> 新增老人</button>
+        </div>
+    </div>
+
+    <div class="table-responsive bg-white p-3 rounded shadow-sm">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>姓名</th>
+                    <th>性别</th>
+                    <th>年龄</th>
+                    <th>房间号</th>
+                    <th>床位号</th>
+                    <th>紧急联系人</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="eldersTableBody">
+                <!-- 动态加载 -->
+            </tbody>
+        </table>
+
+        <!-- 分页 -->
+        <div class="d-flex justify-content-between align-items-center mt-3" id="paginationContainer">
+            <div class="text-muted small" id="paginationInfo">第 1 页，共 1 页，总计 0 条记录</div>
+            <nav aria-label="老人信息分页">
+                <ul class="pagination pagination-sm mb-0" id="paginationNav">
+                    <li class="page-item disabled"><a class="page-link" href="#" data-page="prev">上一页</a></li>
+                    <li class="page-item active"><a class="page-link" href="#" data-page="1">1</a></li>
+                    <li class="page-item disabled"><a class="page-link" href="#" data-page="next">下一页</a></li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- 新增/编辑老人模态框 -->
+<div class="modal fade" id="elderModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">录入老人信息</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="elderForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">姓名 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="f_name" required>
+                            <div class="invalid-feedback">请输入老人姓名</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">性别 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="f_gender" required>
+                                <option value="male">男</option>
+                                <option value="female">女</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">年龄 <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="f_age" min="50" max="120" required>
+                            <div class="invalid-feedback">请输入有效年龄（50-120）</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">房间号 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="f_room" placeholder="如: A301" required>
+                            <div class="invalid-feedback">请输入房间号</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">床位号 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="f_bed" placeholder="如: 01" required>
+                            <div class="invalid-feedback">请输入床位号</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">紧急联系人姓名 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="f_contact_name" required>
+                            <div class="invalid-feedback">请输入紧急联系人姓名</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">紧急联系人电话 <span class="text-danger">*</span></label>
+                            <input type="tel" class="form-control" id="f_contact_phone" pattern="[0-9]{11}" title="请输入11位手机号码" required>
+                            <div class="invalid-feedback">请输入有效的11位手机号码</div>
+                            <div class="form-text">11位数字，以1开头</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">基础病史</label>
+                            <textarea class="form-control" id="f_history" rows="2" placeholder="高血压、糖尿病等（选填）"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveElderBtn">保存信息</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 全局变量
+    let currentPage = 1;
+    const pageSize = 20;
+    let currentMode = 'add'; // 'add' 或 'edit'
+    let editingId = null;
+
+    // 1. 加载表格数据（支持分页和搜索）
+    function loadElders(page = 1) {
+        currentPage = page;
+
+        // 获取搜索参数
+        const name = document.getElementById('searchName').value.trim();
+        const room = document.getElementById('searchRoom').value.trim();
+        const status = document.getElementById('searchStatus').value;
+
+        // 构建查询URL
+        let url = `/api/v1/elders?page=${page}&page_size=${pageSize}`;
+        if (name) url += `&name=${encodeURIComponent(name)}`;
+        if (room) url += `&room_number=${encodeURIComponent(room)}`;
+        if (status) url += `&status=${encodeURIComponent(status)}`;
+
+        LoadingUtils.safeFetch(url)
+        .then(data => {
+            if(data.code === 200) {
+                const tbody = document.getElementById('eldersTableBody');
+                tbody.innerHTML = ''; // 清空原本的表格内容
+
+                const eldersList = data.data.list || [];
+                const pagination = data.data.pagination || {};
+
+                if (eldersList.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无数据</td></tr>';
+                    updatePaginationInfo(pagination);
+                    return;
+                }
+
+                // 循环生成每一行数据
+                eldersList.forEach(elder => {
+                    const tr = document.createElement('tr');
+                    const statusBadge = elder.status === 'active'
+                        ? '<span class="badge bg-success">在院</span>'
+                        : '<span class="badge bg-secondary">已出院</span>';
+
+                    tr.innerHTML = `
+                        <td>${elder.name}</td>
+                        <td>${elder.gender === 'male' ? '男' : '女'}</td>
+                        <td>${elder.age}</td>
+                        <td>${elder.room_number}</td>
+                        <td>${elder.bed_number}</td>
+                        <td>${elder.emergency_contact_name ? elder.emergency_contact_name + ': ' + elder.emergency_contact_phone : elder.emergency_contact}</td>
+                        <td>${statusBadge}</td>
+                        <td>
+                            <button class="btn btn-outline-primary table-action-btn edit-btn" data-id="${elder.id}" title="编辑"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-outline-danger table-action-btn delete-btn" data-id="${elder.id}" title="删除"><i class="bi bi-trash"></i></button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // 更新分页信息
+                updatePaginationInfo(pagination);
+
+                // 绑定编辑和删除按钮事件
+                bindActionButtons();
+            }
+        })
+        .catch(error => {
+            showToast(error.message || '加载数据失败，请检查网络连接', 'danger');
+        });
+    }
+
+    // 更新分页信息
+    function updatePaginationInfo(pagination) {
+        const infoEl = document.getElementById('paginationInfo');
+        const navEl = document.getElementById('paginationNav');
+
+        if (!pagination || !infoEl || !navEl) return;
+
+        infoEl.textContent = `第 ${pagination.page} 页，共 ${pagination.total_pages} 页，总计 ${pagination.total} 条记录`;
+
+        // 生成分页导航
+        let navHtml = '';
+        const totalPages = pagination.total_pages;
+        const current = pagination.page;
+
+        // 上一页
+        if (current > 1) {
+            navHtml += `<li class="page-item"><a class="page-link" href="#" data-page="${current - 1}">上一页</a></li>`;
+        } else {
+            navHtml += `<li class="page-item disabled"><a class="page-link" href="#">上一页</a></li>`;
+        }
+
+        // 页码
+        const maxVisible = 5;
+        let start = Math.max(1, current - Math.floor(maxVisible / 2));
+        let end = Math.min(totalPages, start + maxVisible - 1);
+
+        if (end - start + 1 < maxVisible) {
+            start = Math.max(1, end - maxVisible + 1);
+        }
+
+        for (let i = start; i <= end; i++) {
+            if (i === current) {
+                navHtml += `<li class="page-item active"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+            } else {
+                navHtml += `<li class="page-item"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+            }
+        }
+
+        // 下一页
+        if (current < totalPages) {
+            navHtml += `<li class="page-item"><a class="page-link" href="#" data-page="${current + 1}">下一页</a></li>`;
+        } else {
+            navHtml += `<li class="page-item disabled"><a class="page-link" href="#">下一页</a></li>`;
+        }
+
+        navEl.innerHTML = navHtml;
+
+        // 绑定分页点击事件
+        navEl.querySelectorAll('.page-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(this.getAttribute('data-page'));
+                if (!isNaN(page) && page !== current) {
+                    loadElders(page);
+                }
+            });
+        });
+    }
+
+    // 绑定编辑和删除按钮事件
+    function bindActionButtons() {
+        // 编辑按钮
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                editElder(id);
+            });
+        });
+
+        // 删除按钮
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                deleteElder(id);
+            });
+        });
+    }
+
+    // 编辑老人信息
+    function editElder(id) {
+        LoadingUtils.safeFetch(`/api/v1/elders/${id}`)
+        .then(data => {
+            if(data.code === 200) {
+                const elder = data.data;
+                currentMode = 'edit';
+                editingId = id;
+
+                // 填充表单
+                document.getElementById('f_name').value = elder.name;
+                document.getElementById('f_gender').value = elder.gender;
+                document.getElementById('f_age').value = elder.age;
+                document.getElementById('f_room').value = elder.room_number;
+                document.getElementById('f_bed').value = elder.bed_number;
+                document.getElementById('f_contact_name').value = elder.emergency_contact_name || '紧急联系人';
+                document.getElementById('f_contact_phone').value = elder.emergency_contact_phone || elder.emergency_contact || '';
+                document.getElementById('f_history').value = elder.medical_history || '';
+
+                // 更新模态框标题
+                document.querySelector('#elderModal .modal-title').textContent = '编辑老人信息';
+
+                // 显示模态框
+                const modal = new bootstrap.Modal(document.getElementById('elderModal'));
+                modal.show();
+            } else {
+                showToast('获取老人信息失败：' + data.msg, 'danger');
+            }
+        })
+        .catch(error => {
+            showToast(error.message || '获取老人信息失败，请检查网络连接', 'danger');
+        });
+    }
+
+    // 删除老人信息
+    function deleteElder(id) {
+        if (!confirm('确定要删除这条老人信息吗？删除后无法恢复。')) {
+            return;
+        }
+
+        LoadingUtils.safeFetch(`/api/v1/elders/${id}`, {
+            method: 'DELETE'
+        })
+        .then(data => {
+            if(data.code === 200) {
+                showToast('删除成功', 'success');
+                loadElders(currentPage);
+            } else {
+                showToast('删除失败：' + data.msg, 'danger');
+            }
+        })
+        .catch(error => {
+            showToast(error.message || '删除失败，请检查网络连接', 'danger');
+        });
+    }
+
+    // 重置表单（用于新增）
+    function resetForm() {
+        document.getElementById('elderForm').reset();
+        currentMode = 'add';
+        editingId = null;
+        document.querySelector('#elderModal .modal-title').textContent = '录入老人信息';
+    }
+
+    // 2. 搜索按钮事件
+    document.getElementById('searchBtn').addEventListener('click', function() {
+        loadElders(1);
+    });
+
+    // 3. 导出按钮事件
+    document.getElementById('exportBtn').addEventListener('click', function() {
+        window.location.href = '/api/v1/elders/export';
+    });
+
+    // 4. 新增老人按钮事件
+    document.getElementById('addElderBtn').addEventListener('click', function() {
+        resetForm();
+        const modal = new bootstrap.Modal(document.getElementById('elderModal'));
+        modal.show();
+    });
+
+    // 5. 保存老人信息（新增/编辑）
+    document.getElementById('saveElderBtn').addEventListener('click', function() {
+        // 获取表单数据
+        const formData = {
+            name: document.getElementById('f_name').value,
+            gender: document.getElementById('f_gender').value,
+            age: parseInt(document.getElementById('f_age').value),
+            room_number: document.getElementById('f_room').value,
+            bed_number: document.getElementById('f_bed').value,
+            emergency_contact_name: document.getElementById('f_contact_name').value,
+            emergency_contact_phone: document.getElementById('f_contact_phone').value,
+            medical_history: document.getElementById('f_history').value
+        };
+
+        // 验证必填项
+        if (!formData.name || !formData.age || !formData.room_number || !formData.bed_number ||
+            !formData.emergency_contact_name || !formData.emergency_contact_phone) {
+            showToast('请填写所有必填项（带 * 号）', 'warning');
+            return;
+        }
+
+        // 验证年龄范围
+        if (formData.age < 50 || formData.age > 120) {
+            showToast('年龄必须在50-120岁之间', 'warning');
+            return;
+        }
+
+        // 验证手机号格式
+        const phoneRegex = /^1[0-9]{10}$/;
+        if (!phoneRegex.test(formData.emergency_contact_phone)) {
+            showToast('紧急联系人电话必须是11位数字且以1开头', 'warning');
+            return;
+        }
+
+        // 确定请求URL和方法
+        let url, method;
+        if (currentMode === 'edit' && editingId) {
+            url = `/api/v1/elders/${editingId}`;
+            method = 'PUT';
+        } else {
+            url = '/api/v1/elders';
+            method = 'POST';
+        }
+
+        // 发送请求
+        LoadingUtils.safeFetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        })
+        .then(data => {
+            if(data.code === 200) {
+                // 成功，关闭模态框并刷新数据
+                const modal = bootstrap.Modal.getInstance(document.getElementById('elderModal'));
+                modal.hide();
+                resetForm();
+                loadElders(currentPage);
+            } else {
+                showToast('保存失败：' + data.msg, 'danger');
+            }
+        })
+        .catch(error => {
+            showToast(error.message || '保存失败，请检查网络连接', 'danger');
+        });
+    });
+
+    // 6. 模态框关闭时重置表单
+    document.getElementById('elderModal').addEventListener('hidden.bs.modal', function() {
+        resetForm();
+    });
+
+    // 7. 页面打开时自动加载数据
+    document.addEventListener('DOMContentLoaded', function() {
+        loadElders(1);
+
+        if (window.FormValidator) {
+            FormValidator.setupForm('#elderForm', {
+                '#f_name': ['required'],
+                '#f_age': ['required', { rule: 'range', args: [50, 120] }],
+                '#f_room': ['required'],
+                '#f_bed': ['required'],
+                '#f_contact_name': ['required'],
+                '#f_contact_phone': ['required', 'phone']
+            });
+        }
+
+        if (window.InteractionUtils) {
+            InteractionUtils.trackForm('#elderForm');
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+
+{% block title %}异常报警中心 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}异常报警中心{% endblock %}
+
+{% block sidebar %}
+    <a href="/admin"><i class="bi bi-house-door"></i> 首页数据看板</a>
+    <a href="/admin/elders"><i class="bi bi-people"></i> 老人信息管理</a>
+    <a href="/admin/users"><i class="bi bi-person-badge"></i> 账号权限管理</a>
+    <a href="/admin/alarms" class="active"><i class="bi bi-exclamation-triangle"></i> 异常报警中心</a>
+    <a href="/admin/alarm-rules"><i class="bi bi-gear"></i> 报警规则配置</a>
+    <a href="/admin/visits"><i class="bi bi-calendar-check"></i> 探视预约管理</a>
+    <a href="/admin/messages"><i class="bi bi-chat-left-text"></i> 消息管理</a>
+    <a href="/admin/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag"></i> 异常上报管理</a>
+    <a href="/admin/reports"><i class="bi bi-bar-chart"></i> 数据统计分析</a>
+    <a href="/admin/logs"><i class="bi bi-journal-text"></i> 系统日志</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3 align-items-center">
+        <div class="col-md-6">
+            <select class="form-select w-auto d-inline-block" id="statusFilter">
+                <option value="">全部状态</option>
+                <option value="unhandled">未处理</option>
+                <option value="processing">处理中</option>
+                <option value="resolved">已完成</option>
+            </select>
+            <select class="form-select w-auto d-inline-block ms-2" id="elderFilter">
+                <option value="">全部老人</option>
+            </select>
+            <button class="btn btn-outline-primary ms-2" id="searchBtn">
+                <i class="bi bi-search"></i> 查询
+            </button>
+        </div>
+        <div class="col-md-6 text-end">
+            <span class="text-muted small" id="paginationInfo"></span>
+        </div>
+    </div>
+
+    <div class="table-responsive bg-white p-3 rounded shadow-sm">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>老人姓名</th>
+                    <th>房间号</th>
+                    <th>报警类型</th>
+                    <th>触发时间</th>
+                    <th>响应时长</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="alarmsTableBody">
+                <tr><td colspan="7" class="text-center text-muted py-4">
+                    <i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>正在加载...
+                </td></tr>
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-center">
+            <nav><ul class="pagination pagination-sm" id="paginationNav"></ul></nav>
+        </div>
+    </div>
+</div>
+
+<!-- 报警详情模态框 -->
+<div class="modal fade" id="alarmDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">报警详情</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="alarmDetailContent">
+                <!-- 内容区域 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 处理模态框 -->
+<div class="modal fade" id="processAlarmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">开始处理</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">备注说明</label>
+                    <textarea class="form-control" id="processNote" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary btn-sm" id="confirmProcessBtn">确认处理</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 完成处理模态框 -->
+<div class="modal fade" id="resolveAlarmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">处理完成</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">处理结果 <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="resolveResult" rows="4" placeholder="请描述处理的具体情况..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success btn-sm" id="confirmResolveBtn">确认完成</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentPage = 1;
+    let currentAlarmId = null;
+    const pageSize = 20;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadElderOptions();
+        const urlParams = new URLSearchParams(window.location.search);
+        const elderIdParam = urlParams.get('elder_id');
+        if (elderIdParam) {
+            document.getElementById('elderFilter').value = elderIdParam;
+        }
+        loadAlarms(1).then(() => {
+            const highlightAlarmId = urlParams.get('highlight_alarm');
+            if (highlightAlarmId) {
+                viewAlarmDetail(parseInt(highlightAlarmId));
+            }
+        });
+        document.getElementById('searchBtn').addEventListener('click', function() { loadAlarms(1); });
+        document.getElementById('statusFilter').addEventListener('change', function() { loadAlarms(1); });
+        document.getElementById('elderFilter').addEventListener('change', function() { loadAlarms(1); });
+        document.getElementById('confirmProcessBtn').addEventListener('click', processAlarm);
+        document.getElementById('confirmResolveBtn').addEventListener('click', resolveAlarm);
+    });
+
+    function loadElderOptions() {
+        LoadingUtils.safeFetch('/api/v1/elders?page_size=100').then(data => {
+            if (data.code === 200) {
+                const select = document.getElementById('elderFilter');
+                const elders = data.data.list || data.data || [];
+                elders.forEach(elder => {
+                    const option = document.createElement('option');
+                    option.value = elder.id;
+                    option.textContent = elder.name + ' (' + (elder.room_number || '') + ')';
+                    select.appendChild(option);
+                });
+                const urlParams = new URLSearchParams(window.location.search);
+                const elderIdParam = urlParams.get('elder_id');
+                if (elderIdParam) {
+                    select.value = elderIdParam;
+                }
+            }
+        }).catch(() => {});
+    }
+
+    function loadAlarms(page) {
+        currentPage = page;
+        const status = document.getElementById('statusFilter').value;
+        const elderId = document.getElementById('elderFilter').value;
+        let url = `/api/v1/alarms?page=${page}&page_size=${pageSize}`;
+        if (status) url += `&status=${status}`;
+        if (elderId) url += `&elder_id=${elderId}`;
+
+        return LoadingUtils.safeFetch(url).then(data => {
+            if (data.code === 200) {
+                renderAlarms(data.data.list);
+                renderPagination(data.data.pagination);
+            }
+        }).catch(err => {
+            showToast(err.message || '加载报警列表失败，请重试', 'danger');
+        });
+    }
+
+    function renderAlarms(alarms) {
+        const typeNames = {
+            'auto_health': '健康异常',
+            'manual_incident': '手动上报',
+            'other': '其他'
+        };
+        const statusColors = {
+            'unhandled': 'danger',
+            'processing': 'warning',
+            'resolved': 'success'
+        };
+        const statusTexts = {
+            'unhandled': '未处理',
+            'processing': '处理中',
+            'resolved': '已完成'
+        };
+
+        const tbody = document.getElementById('alarmsTableBody');
+        if (alarms.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> 暂无报警记录</td></tr>';
+        } else {
+            tbody.innerHTML = alarms.map(alarm => `
+                <tr>
+                    <td class="fw-bold">${alarm.elder_name}</td>
+                    <td><span class="badge bg-secondary">${alarm.room_number}</span></td>
+                    <td>${typeNames[alarm.type] || alarm.type}</td>
+                    <td>${alarm.triggered_at}</td>
+                    <td>
+                        ${alarm.response_duration ? `<span class="text-muted">${alarm.response_duration}</span>` : '<span class="text-muted">-</span>'}
+                    </td>
+                    <td>
+                        <span class="badge bg-${statusColors[alarm.status]}">${statusTexts[alarm.status]}</span>
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" onclick="viewAlarmDetail(${alarm.id})">
+                                <i class="bi bi-eye"></i> 详情
+                            </button>
+                            ${alarm.status === 'unhandled' ? `
+                                <button class="btn btn-outline-warning" onclick="openProcessModal(${alarm.id})">
+                                    <i class="bi bi-play"></i> 处理
+                                </button>
+                            ` : ''}
+                            ${alarm.status !== 'resolved' ? `
+                                <button class="btn btn-outline-success" onclick="openResolveModal(${alarm.id})">
+                                    <i class="bi bi-check-circle"></i> 完成
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    function renderPagination(pagination) {
+        document.getElementById('paginationInfo').textContent = `共 ${pagination.total} 条`;
+
+        let html = '';
+        if (pagination.page > 1) {
+            html += `<li class="page-item"><a class="page-link" href="#" data-page="${pagination.page - 1}">上一页</a></li>`;
+        }
+        for (let i = Math.max(1, pagination.page - 2); i <= Math.min(pagination.total_pages, pagination.page + 2); i++) {
+            html += `<li class="page-item ${i === pagination.page ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>`;
+        }
+        if (pagination.page < pagination.total_pages) {
+            html += `<li class="page-item"><a class="page-link" href="#" data-page="${pagination.page + 1}">下一页</a></li>`;
+        }
+
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav a').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(e.target.dataset.page);
+                if (!isNaN(page)) loadAlarms(page);
+            });
+        });
+    }
+
+    function viewAlarmDetail(id) {
+        LoadingUtils.safeFetch(`/api/v1/alarms/${id}`).then(data => {
+            if (data.code === 200) {
+                renderAlarmDetail(data.data);
+                new bootstrap.Modal(document.getElementById('alarmDetailModal')).show();
+            }
+        }).catch(err => {
+            showToast(err.message || '获取报警详情失败，请重试', 'danger');
+        });
+    }
+
+    function renderAlarmDetail(data) {
+        const alarm = data.alarm;
+        const logs = data.action_logs || [];
+
+        const typeNames = {
+            'auto_health': '健康异常',
+            'manual_incident': '手动上报',
+            'other': '其他'
+        };
+        const statusColors = {
+            'unhandled': 'danger',
+            'processing': 'warning',
+            'resolved': 'success'
+        };
+        const statusTexts = {
+            'unhandled': '未处理',
+            'processing': '处理中',
+            'resolved': '已完成'
+        };
+        const actionTexts = {
+            'process': '开始处理',
+            'resolve': '处理完成'
+        };
+
+        let logsHtml = '';
+        if (logs.length === 0) {
+            logsHtml = '<div class="text-muted text-center"><i class="bi bi-inbox"></i> 暂无处理记录</div>';
+        } else {
+            logsHtml = logs.map(log => `
+                <div class="card mb-2 border-0 bg-light">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="fw-bold">
+                                <span class="badge bg-secondary me-2">${actionTexts[log.action]}</span>
+                                ${log.operator_name}
+                            </div>
+                            <small class="text-muted">${log.created_at}</small>
+                        </div>
+                        <div class="small">${log.note || '-'}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('alarmDetailContent').innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="fw-bold">${alarm.elder_name}</h6>
+                    <p class="text-muted mb-1"><i class="bi bi-house"></i> ${alarm.room_number} 房间</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <span class="badge bg-${statusColors[alarm.status]}">${statusTexts[alarm.status]}</span>
+                </div>
+            </div>
+            <hr>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="fw-bold">报警类型</div>
+                    <div class="text-muted">${typeNames[alarm.type]}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="fw-bold">触发时间</div>
+                    <div class="text-muted">${alarm.triggered_at}</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="fw-bold">处理人</div>
+                    <div class="text-muted">${alarm.handler_name || '-'}</div>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <div class="fw-bold">报警源</div>
+                    <div class="text-muted">
+                        ${alarm.type === 'manual_incident' && alarm.trigger_source ? 
+                            `<a href="/admin/incident-reports" class="text-decoration-none">
+                                异常上报 #${alarm.trigger_source} <i class="bi bi-box-arrow-up-right small"></i>
+                            </a>` : 
+                            (alarm.trigger_source || '-')}
+                    </div>
+                </div>
+            </div>
+            ${alarm.result ? `
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <div class="fw-bold">处理结果</div>
+                    <div class="border bg-light p-2 rounded text-muted">${alarm.result}</div>
+                </div>
+            </div>
+            ` : ''}
+            <hr>
+            <h6 class="fw-bold mb-3">处理记录</h6>
+            ${logsHtml}
+        `;
+    }
+
+    function openProcessModal(id) {
+        currentAlarmId = id;
+        document.getElementById('processNote').value = '';
+        new bootstrap.Modal(document.getElementById('processAlarmModal')).show();
+    }
+
+    function processAlarm() {
+        if (!currentAlarmId) return;
+        const note = document.getElementById('processNote').value;
+
+        LoadingUtils.safeFetch(`/api/v1/alarms/${currentAlarmId}/process`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ note: note })
+        }).then(data => {
+            if (data.code === 200) {
+                showToast('处理成功！', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('processAlarmModal')).hide();
+                loadAlarms(currentPage);
+            } else {
+                showToast('处理失败：' + data.msg, 'danger');
+            }
+        }).catch(err => {
+            showToast(err.message || '处理失败，请重试', 'danger');
+        });
+    }
+
+    function openResolveModal(id) {
+        currentAlarmId = id;
+        document.getElementById('resolveResult').value = '';
+        new bootstrap.Modal(document.getElementById('resolveAlarmModal')).show();
+    }
+
+    function resolveAlarm() {
+        if (!currentAlarmId) return;
+        const result = document.getElementById('resolveResult').value;
+        if (!result) { alert('请填写处理结果！'); return; }
+
+        LoadingUtils.safeFetch(`/api/v1/alarms/${currentAlarmId}/resolve`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ result: result })
+        }).then(data => {
+            if (data.code === 200) {
+                showToast('处理完成！', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('resolveAlarmModal')).hide();
+                loadAlarms(currentPage);
+            } else {
+                showToast('处理失败：' + data.msg, 'danger');
+            }
+        }).catch(err => {
+            showToast(err.message || '处理失败，请重试', 'danger');
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,840 @@
+{% extends "base.html" %}
+
+{% block title %}护工工作台 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}护工工作台{% endblock %}
+
+{% block sidebar %}
+    <a href="/caregiver" class="active"><i class="bi bi-house-door"></i> 工作台</a>
+    <a href="/caregiver/tasks"><i class="bi bi-calendar-check"></i> 护理任务</a>
+    <a href="/caregiver/health-records"><i class="bi bi-heart-pulse"></i> 健康记录</a>
+    <a href="/caregiver/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/caregiver/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/caregiver/incident-reports"><i class="bi bi-exclamation-triangle"></i> 异常上报</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-3 col-sm-6 mb-4">
+            <div class="card h-100" style="border-top: 4px solid var(--primary);">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title mb-2" style="color: var(--primary);">今日任务</h5>
+                            <h2 class="mb-0" id="todayTasksCount">0</h2>
+                        </div>
+                        <div class="p-3 rounded-3" style="background: var(--primary-soft)">
+                            <i class="bi bi-list-task fs-2" style="color: var(--primary)"></i>
+                        </div>
+                    </div>
+                    <p class="card-text text-muted mt-3 mb-0">
+                        <i class="bi bi-check-circle text-success me-1"></i>已完成: <span id="tasksCompletedCount">0</span>
+                        <span class="ms-3"><i class="bi bi-clock-history me-1"></i>待完成: <span id="tasksPendingCount">0</span></span>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-4">
+            <div class="card h-100" style="border-top: 4px solid var(--danger);">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title mb-2" style="color: var(--danger);">待处理报警</h5>
+                            <h2 class="mb-0" id="unhandledAlarmsCount">0</h2>
+                        </div>
+                        <div class="p-3 rounded-3" style="background: var(--danger-soft)">
+                            <i class="bi bi-exclamation-triangle fs-2" style="color: var(--danger)"></i>
+                        </div>
+                    </div>
+                    <p class="card-text text-muted mt-3 mb-0"><i class="bi bi-bell me-1"></i>需要及时处理的报警</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-4">
+            <div class="card h-100" style="border-top: 4px solid var(--success);">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title mb-2" style="color: var(--success);">今日记录</h5>
+                            <h2 class="mb-0" id="todayRecordsCount">0</h2>
+                        </div>
+                        <div class="p-3 rounded-3" style="background: var(--success-soft)">
+                            <i class="bi bi-clipboard-check fs-2" style="color: var(--success)"></i>
+                        </div>
+                    </div>
+                    <p class="card-text text-muted mt-3 mb-0"><i class="bi bi-file-earmark-text me-1"></i>已录入的健康记录</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-4">
+            <div class="card h-100" style="border-top: 4px solid var(--info);">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h5 class="card-title mb-2" style="color: var(--info);">护理老人</h5>
+                            <h2 class="mb-0" id="assignedEldersCount">0</h2>
+                        </div>
+                        <div class="p-3 rounded-3" style="background: var(--info-soft)">
+                            <i class="bi bi-people fs-2" style="color: var(--info)"></i>
+                        </div>
+                    </div>
+                    <p class="card-text text-muted mt-3 mb-0"><i class="bi bi-heart me-1"></i>负责照护的老人</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-lightning-charge-fill me-2" style="color: var(--warning);"></i>快捷操作</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <a href="/caregiver/health-records" class="card text-decoration-none shadow-sm border-primary h-100">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-plus-circle fs-1" style="color: var(--primary);"></i>
+                                    <h5 class="mt-3 mb-1">快速录入</h5>
+                                    <p class="text-muted mb-0 small">记录老人健康数据</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <a href="/caregiver/incident-reports" class="card text-decoration-none shadow-sm border-danger h-100">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-exclamation-octagon fs-1" style="color: var(--danger);"></i>
+                                    <h5 class="mt-3 mb-1">异常上报</h5>
+                                    <p class="text-muted mb-0 small">发现异常立即上报</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <a href="/caregiver/messages" class="card text-decoration-none shadow-sm border-success h-100">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-chat-dots fs-1" style="color: var(--success);"></i>
+                                    <h5 class="mt-3 mb-1">消息沟通</h5>
+                                    <p class="text-muted mb-0 small">与家属保持联系</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <a href="/caregiver/tasks" class="card text-decoration-none shadow-sm border-info h-100">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-list-check fs-1" style="color: var(--info);"></i>
+                                    <h5 class="mt-3 mb-1">任务管理</h5>
+                                    <p class="text-muted mb-0 small">查看今日护理任务</p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-7 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-person-check me-2" style="color: var(--primary);"></i>今日待护理老人</h5>
+                    <span class="text-muted small">点击老人快速录入记录</span>
+                </div>
+                <div class="card-body">
+                    <div id="todayEldersList">
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>
+                            正在加载老人信息...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5 mb-4">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2" style="color: var(--danger);"></i>未处理报警</h5>
+                    <span class="badge bg-danger" id="unhandledAlarmsBadge">0</span>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    <div id="unhandledAlarmsList">
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>
+                            正在加载报警信息...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart-fill me-2" style="color: var(--success);"></i>今日进度</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold">护理任务</span>
+                            <span id="taskProgressText">0%</span>
+                        </div>
+                        <div class="progress" style="height: 20px;">
+                            <div id="taskProgressBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold">健康记录</span>
+                            <span id="recordProgressText">0%</span>
+                        </div>
+                        <div class="progress" style="height: 20px;">
+                            <div id="recordProgressBar" class="progress-bar bg-info" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-list-task me-2" style="color: var(--primary);"></i>最新任务</h5>
+                    <a href="/caregiver/tasks" class="btn btn-sm btn-outline-primary">查看全部</a>
+                </div>
+                <div class="card-body">
+                    <div id="recentTasksList">
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>
+                            正在加载任务...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="quickRecordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickRecordModalTitle">快速录入护理记录</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickRecordForm">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">老人姓名</label>
+                        <input type="text" class="form-control" id="quickRecordElderName" readonly>
+                        <input type="hidden" id="quickRecordElderId">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">体温 (℃)</label>
+                            <input type="number" step="0.1" min="35" max="42" class="form-control" id="quickRecordTemp" placeholder="35-42">
+                            <div class="invalid-feedback">体温范围：35-42℃</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">心率 (bpm)</label>
+                            <input type="number" min="40" max="200" class="form-control" id="quickRecordHeartRate" placeholder="40-200">
+                            <div class="invalid-feedback">心率范围：40-200bpm</div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">收缩压 (mmHg)</label>
+                            <input type="number" min="60" max="200" class="form-control" id="quickRecordSystolic" placeholder="60-200">
+                            <div class="invalid-feedback">收缩压范围：60-200mmHg</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">舒张压 (mmHg)</label>
+                            <input type="number" min="40" max="120" class="form-control" id="quickRecordDiastolic" placeholder="40-120">
+                            <div class="invalid-feedback">舒张压范围：40-120mmHg</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">血糖 (mmol/L)</label>
+                        <input type="number" step="0.1" min="2" max="30" class="form-control" id="quickRecordBloodSugar" placeholder="2-30">
+                        <div class="invalid-feedback">血糖范围：2-30mmol/L</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">备注</label>
+                        <textarea class="form-control" id="quickRecordNotes" rows="2" placeholder="其他健康状况备注"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="submitQuickRecord">提交记录</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="alarmDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>报警详情</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="alarmDetailBody">
+                <div class="text-center py-3">
+                    <i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i>
+                    <p class="text-muted">加载中...</p>
+                </div>
+            </div>
+            <div class="modal-footer" id="alarmDetailFooter">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="taskDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-list-task me-2"></i>任务详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="taskDetailBody">
+                <div class="text-center py-3">
+                    <i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i>
+                    <p class="text-muted">加载中...</p>
+                </div>
+            </div>
+            <div class="modal-footer" id="taskDetailFooter">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let quickRecordModal;
+let alarmDetailModal;
+let taskDetailModal;
+
+document.addEventListener('DOMContentLoaded', function() {
+    quickRecordModal = new bootstrap.Modal(document.getElementById('quickRecordModal'));
+    alarmDetailModal = new bootstrap.Modal(document.getElementById('alarmDetailModal'));
+    taskDetailModal = new bootstrap.Modal(document.getElementById('taskDetailModal'));
+
+    if (window.FormValidator) {
+        FormValidator.setupForm('#quickRecordForm', {
+            '#quickRecordTemp': [{ rule: 'range', args: [35, 42] }],
+            '#quickRecordHeartRate': [{ rule: 'range', args: [40, 200] }],
+            '#quickRecordSystolic': [{ rule: 'range', args: [60, 200] }],
+            '#quickRecordDiastolic': [{ rule: 'range', args: [40, 120] }],
+            '#quickRecordBloodSugar': [{ rule: 'range', args: [2, 30] }]
+        });
+    }
+
+    loadDashboardData();
+    setInterval(loadDashboardData, 30000);
+
+    document.getElementById('submitQuickRecord').addEventListener('click', submitQuickRecord);
+});
+
+async function loadDashboardData() {
+    const eldersContainer = document.getElementById('todayEldersList');
+    const alarmsContainer = document.getElementById('unhandledAlarmsList');
+    const tasksContainer = document.getElementById('recentTasksList');
+
+    try {
+        const result = await LoadingUtils.safeFetch('/api/v1/stats/caregiver-dashboard');
+
+        if (result.code === 200) {
+            const data = result.data;
+            updateDashboardMetrics(data);
+            updateProgress(data);
+            renderUnhandledAlarms(data.recent_alarms || []);
+            renderRecentTasks(data.today_tasks || []);
+        } else {
+            showToast(result.msg || '加载数据失败', 'danger');
+            LoadingUtils.showError(eldersContainer, result.msg || '加载数据失败', loadDashboardData);
+            LoadingUtils.showError(alarmsContainer, result.msg || '加载数据失败', loadDashboardData);
+            LoadingUtils.showError(tasksContainer, result.msg || '加载数据失败', loadDashboardData);
+        }
+    } catch (error) {
+        console.error('加载数据失败:', error);
+        showToast(error.message || '加载数据失败，请刷新重试', 'danger');
+        LoadingUtils.showError(eldersContainer, error.message || '加载数据失败', loadDashboardData);
+        LoadingUtils.showError(alarmsContainer, error.message || '加载数据失败', loadDashboardData);
+        LoadingUtils.showError(tasksContainer, error.message || '加载数据失败', loadDashboardData);
+    }
+
+    loadAssignedElders();
+}
+
+function updateDashboardMetrics(data) {
+    const todayTasks = data.today_tasks_count || 0;
+    const completedTasks = data.tasks_completed_count || 0;
+    const pendingTasks = todayTasks - completedTasks;
+
+    document.getElementById('todayTasksCount').textContent = todayTasks;
+    document.getElementById('tasksCompletedCount').textContent = completedTasks;
+    document.getElementById('tasksPendingCount').textContent = Math.max(0, pendingTasks);
+    if (window.NumberAnimation) {
+        NumberAnimation.animateValue('unhandledAlarmsCount', 0, data.unhandled_alarms_count || 0, { duration: 800 });
+        NumberAnimation.animateValue('todayRecordsCount', 0, data.today_records_count || 0, { duration: 800 });
+        NumberAnimation.animateValue('assignedEldersCount', 0, data.assigned_elders_count || 0, { duration: 800 });
+    } else {
+        document.getElementById('unhandledAlarmsCount').textContent = data.unhandled_alarms_count || 0;
+        document.getElementById('todayRecordsCount').textContent = data.today_records_count || 0;
+        document.getElementById('assignedEldersCount').textContent = data.assigned_elders_count || 0;
+    }
+    document.getElementById('unhandledAlarmsBadge').textContent = data.unhandled_alarms_count || 0;
+
+    if (window.AnomalyAlert && data.unhandled_alarms_count > 0) {
+        AnomalyAlert.highlightElement('#unhandledAlarmsCount', { level: 'danger', pulse: true, icon: false });
+    }
+}
+
+async function loadAssignedElders() {
+    const container = document.getElementById('todayEldersList');
+    try {
+        const result = await LoadingUtils.safeFetch('/api/v1/caregiver/assigned-elders');
+
+        if (result.code === 200) {
+            renderEldersList(result.data);
+        } else {
+            LoadingUtils.showError(container, result.msg || '加载老人列表失败', loadAssignedElders);
+        }
+    } catch (error) {
+        LoadingUtils.showError(container, error.message || '加载老人列表失败，请刷新重试', loadAssignedElders);
+    }
+}
+
+function renderEldersList(elders) {
+    const container = document.getElementById('todayEldersList');
+
+    if (!elders || elders.length === 0) {
+        LoadingUtils.showEmpty(container, '暂无负责的老人');
+        return;
+    }
+
+    container.innerHTML = elders.map(elder => {
+        const recordBadge = elder.has_today_record
+            ? '<span class="badge bg-success me-2"><i class="bi bi-check-lg"></i> 已录入</span>'
+            : '<span class="badge bg-primary me-2"><i class="bi bi-plus-lg"></i> 快速录入</span>';
+        const careItems = elder.today_care_items
+            ? `<div class="mt-2 pt-2 border-top small"><span class="text-muted">今日护理：</span><span>${elder.today_care_items}</span></div>`
+            : '';
+        return `
+        <div class="card mb-2 hover-lift" style="cursor:pointer;" onclick="openQuickRecordModal(${elder.id}, '${elder.name}')">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">${elder.name}</h6>
+                        <p class="mb-0 text-muted small">
+                            <i class="bi bi-door-open me-1"></i>${elder.room_number || '未分配房间'}
+                            ${elder.gender ? `· ${elder.gender === 'male' ? '男' : '女'}` : ''}
+                            ${elder.age ? `· ${elder.age}岁` : ''}
+                        </p>
+                    </div>
+                    <div class="d-flex align-items-center">${recordBadge}</div>
+                </div>
+                ${careItems}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderUnhandledAlarms(alarms) {
+    const container = document.getElementById('unhandledAlarmsList');
+
+    if (!alarms || alarms.length === 0) {
+        LoadingUtils.showEmpty(container, '暂无未处理报警');
+        return;
+    }
+
+    container.innerHTML = alarms.map(alarm => `
+        <div class="alert alert-danger mb-2 p-3" style="cursor:pointer;" onclick="viewAlarmDetail(${alarm.id})">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="mb-1">${alarm.elder_name || '未知老人'}</h6>
+                    <p class="mb-1 small">${alarm.trigger_note || alarm.type || '健康报警'}</p>
+                    <p class="mb-0 text-muted small">
+                        <i class="bi bi-clock me-1"></i>${formatTime(alarm.triggered_at)}
+                    </p>
+                </div>
+                <span class="badge bg-danger">点击处理</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderRecentTasks(tasks) {
+    const container = document.getElementById('recentTasksList');
+
+    if (!tasks || tasks.length === 0) {
+        LoadingUtils.showEmpty(container, '暂无今日任务');
+        return;
+    }
+
+    container.innerHTML = tasks.map(task => `
+        <div class="card mb-2 hover-lift" style="cursor:pointer;" onclick="viewTaskDetail(${task.id})">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">${task.elder_name || '未知老人'}</h6>
+                        <p class="mb-0 text-muted small">${task.content || '护理任务'}</p>
+                        ${task.due_time ? `<p class="mb-0 text-muted small"><i class="bi bi-clock me-1"></i>截止: ${new Date(task.due_time).toLocaleString('zh-CN', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</p>` : ''}
+                    </div>
+                    <span class="badge bg-warning text-dark">待完成</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateProgress(data) {
+    const totalTasks = data.today_tasks_count || 0;
+    const completedTasks = data.tasks_completed_count || 0;
+    const taskProgress = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0;
+
+    document.getElementById('taskProgressText').textContent = taskProgress + '%';
+    document.getElementById('taskProgressBar').style.width = taskProgress + '%';
+
+    const assignedCount = data.assigned_elders_count || 0;
+    const recordsCount = data.today_records_count || 0;
+    const recordProgress = assignedCount > 0 ? Math.min(Math.round(recordsCount / assignedCount * 100), 100) : 0;
+
+    document.getElementById('recordProgressText').textContent = recordProgress + '%';
+    document.getElementById('recordProgressBar').style.width = recordProgress + '%';
+}
+
+async function viewAlarmDetail(alarmId) {
+    const body = document.getElementById('alarmDetailBody');
+    const footer = document.getElementById('alarmDetailFooter');
+
+    body.innerHTML = '<div class="text-center py-3"><i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i><p class="text-muted">加载中...</p></div>';
+    footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>';
+    alarmDetailModal.show();
+
+    try {
+        const result = await LoadingUtils.safeFetch('/api/v1/alarms/' + alarmId);
+        if (result.code === 200) {
+            const alarm = result.data.alarm;
+            const actionLogs = result.data.action_logs || [];
+
+            const statusMap = {
+                'unhandled': '<span class="badge bg-danger">未处理</span>',
+                'processing': '<span class="badge bg-warning text-dark">处理中</span>',
+                'resolved': '<span class="badge bg-success">已解决</span>'
+            };
+
+            let logsHtml = '';
+            if (actionLogs.length > 0) {
+                logsHtml = '<h6 class="mt-3 mb-2">处理记录</h6><div class="list-group">';
+                actionLogs.forEach(function(log) {
+                    logsHtml += '<div class="list-group-item"><div class="d-flex justify-content-between"><strong>' + (log.operator_name || '') + '</strong><small class="text-muted">' + new Date(log.created_at).toLocaleString('zh-CN') + '</small></div><p class="mb-0 small">' + (log.note || log.action) + '</p></div>';
+                });
+                logsHtml += '</div>';
+            }
+
+            body.innerHTML = `
+                <div class="table-responsive"><table class="table table-bordered">
+                    <tr><th>老人</th><td>${alarm.elder_name || '未知'} (${alarm.room_number || '-'})</td></tr>
+                    <tr><th>报警类型</th><td>${alarm.type || '健康报警'}</td></tr>
+                    <tr><th>触发时间</th><td>${new Date(alarm.triggered_at).toLocaleString('zh-CN')}</td></tr>
+                    <tr><th>状态</th><td>${statusMap[alarm.status] || alarm.status}</td></tr>
+                    ${alarm.trigger_note ? '<tr><th>触发说明</th><td>' + alarm.trigger_note + '</td></tr>' : ''}
+                    ${alarm.handler_name ? '<tr><th>处理人</th><td>' + alarm.handler_name + '</td></tr>' : ''}
+                    ${alarm.processing_at ? '<tr><th>开始处理</th><td>' + new Date(alarm.processing_at).toLocaleString('zh-CN') + '</td></tr>' : ''}
+                    ${alarm.resolved_at ? '<tr><th>处理完成</th><td>' + new Date(alarm.resolved_at).toLocaleString('zh-CN') + '</td></tr>' : ''}
+                    ${alarm.result ? '<tr><th>处理结果</th><td>' + alarm.result + '</td></tr>' : ''}
+                </table></div>
+                ${logsHtml}
+            `;
+
+            if (alarm.status === 'unhandled') {
+                footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button type="button" class="btn btn-warning" onclick="processAlarm(' + alarmId + ')"><i class="bi bi-play-circle me-1"></i>开始处理</button>';
+            } else if (alarm.status === 'processing') {
+                footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button type="button" class="btn btn-success" onclick="showResolveForm(' + alarmId + ')"><i class="bi bi-check-circle me-1"></i>处理完成</button>';
+            } else {
+                footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>';
+            }
+        } else {
+            body.innerHTML = '<div class="alert alert-danger">' + (result.msg || '加载失败') + '</div>';
+        }
+    } catch (error) {
+        body.innerHTML = '<div class="alert alert-danger">' + (error.message || '加载报警详情失败') + '</div>';
+    }
+}
+
+async function processAlarm(alarmId) {
+    try {
+        const result = await LoadingUtils.safeFetch('/api/v1/alarms/' + alarmId + '/process', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: '护工开始处理' })
+        });
+
+        if (result.code === 200) {
+            showToast('已开始处理报警', 'success');
+            alarmDetailModal.hide();
+            loadDashboardData();
+        } else {
+            showToast(result.msg || '操作失败', 'danger');
+        }
+    } catch (error) {
+        showToast(error.message || '操作失败，请重试', 'danger');
+    }
+}
+
+function showResolveForm(alarmId) {
+    const body = document.getElementById('alarmDetailBody');
+    body.innerHTML = `
+        <div class="mb-3">
+            <label class="form-label fw-bold">处理结果</label>
+            <textarea class="form-control" id="alarmResolveResult" rows="3" placeholder="请输入处理结果"></textarea>
+        </div>
+    `;
+
+    const footer = document.getElementById('alarmDetailFooter');
+    footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-outline-secondary" onclick="viewAlarmDetail(' + alarmId + ')">返回详情</button><button type="button" class="btn btn-success" onclick="resolveAlarm(' + alarmId + ')"><i class="bi bi-check-circle me-1"></i>提交结果</button>';
+}
+
+async function resolveAlarm(alarmId) {
+    const resultText = document.getElementById('alarmResolveResult').value.trim();
+    if (!resultText) {
+        showToast('请填写处理结果', 'warning');
+        return;
+    }
+
+    try {
+        const result = await LoadingUtils.safeFetch('/api/v1/alarms/' + alarmId + '/resolve', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ result: resultText })
+        });
+
+        if (result.code === 200) {
+            showToast('报警已处理完成', 'success');
+            alarmDetailModal.hide();
+            loadDashboardData();
+        } else {
+            showToast(result.msg || '操作失败', 'danger');
+        }
+    } catch (error) {
+        showToast(error.message || '操作失败，请重试', 'danger');
+    }
+}
+
+async function viewTaskDetail(taskId) {
+    const body = document.getElementById('taskDetailBody');
+    const footer = document.getElementById('taskDetailFooter');
+
+    body.innerHTML = '<div class="text-center py-3"><i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i><p class="text-muted">加载中...</p></div>';
+    footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>';
+    taskDetailModal.show();
+
+    try {
+        const result = await LoadingUtils.safeFetch('/api/v1/care-tasks/' + taskId);
+        if (result.code === 200) {
+            const t = result.data;
+            const statusBadge = t.status === 'completed'
+                ? '<span class="badge bg-success fs-6">已完成</span>'
+                : '<span class="badge bg-warning text-dark fs-6">待处理</span>';
+
+            const genderText = t.elder_gender === 'male' ? '男' : '女';
+            const careLevelName = t.elder_care_level_name || '标准护理';
+            let careLevelClass = 'bg-secondary';
+            if (t.elder_care_level === 'special') careLevelClass = 'bg-danger';
+            else if (t.elder_care_level === 'enhanced') careLevelClass = 'bg-warning text-dark';
+
+            const isOverdue = t.status === 'pending' && new Date(t.due_time) < new Date();
+
+            let completedInfo = '';
+            if (t.status === 'completed') {
+                completedInfo = '<div class="card border-success mt-3">' +
+                    '<div class="card-header bg-success text-white"><h6 class="mb-0"><i class="bi bi-check-circle me-2"></i>完成信息</h6></div>' +
+                    '<div class="card-body">' +
+                        '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                            '<tr><td class="text-muted">完成时间</td><td><i class="bi bi-clock-fill me-1 text-success"></i>' + (t.completed_at ? new Date(t.completed_at).toLocaleString('zh-CN') : '-') + '</td></tr>' +
+                            '<tr><td class="text-muted">完成人</td><td><i class="bi bi-person-check me-1 text-success"></i>' + (t.completed_by_name || '-') + '</td></tr>' +
+                        '</table></div>' +
+                    '</div>' +
+                '</div>';
+            }
+
+            body.innerHTML =
+                '<div class="row">' +
+                    '<div class="col-md-7">' +
+                        '<div class="card mb-3">' +
+                            '<div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-clipboard-text me-2"></i>任务信息</h6></div>' +
+                            '<div class="card-body">' +
+                                '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                                    '<tr><td class="text-muted">任务内容</td><td class="fw-bold">' + (t.content || '') + '</td></tr>' +
+                                    '<tr><td class="text-muted">计划截止</td><td class="' + (isOverdue ? 'text-danger fw-bold' : '') + '">' +
+                                        '<i class="bi bi-clock me-1"></i>' + new Date(t.due_time).toLocaleString('zh-CN') +
+                                        (isOverdue ? ' <span class="badge bg-danger">已逾期</span>' : '') +
+                                    '</td></tr>' +
+                                    '<tr><td class="text-muted">当前状态</td><td>' + statusBadge + '</td></tr>' +
+                                    '<tr><td class="text-muted">负责护工</td><td><i class="bi bi-person me-1"></i>' + (t.caregiver_name || '-') + '</td></tr>' +
+                                '</table></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="col-md-5">' +
+                        '<div class="card mb-3">' +
+                            '<div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-person-badge me-2"></i>老人信息</h6></div>' +
+                            '<div class="card-body">' +
+                                '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                                    '<tr><td class="text-muted">姓名</td><td class="fw-bold">' + (t.elder_name || '-') + '</td></tr>' +
+                                    '<tr><td class="text-muted">性别/年龄</td><td>' + genderText + ' · ' + (t.elder_age || '-') + '岁</td></tr>' +
+                                    '<tr><td class="text-muted">房间/床位</td><td>' + (t.room_number || '-') + '室 ' + (t.bed_number || '-') + '床</td></tr>' +
+                                    '<tr><td class="text-muted">护理等级</td><td><span class="badge ' + careLevelClass + '">' + careLevelName + '</span></td></tr>' +
+                                    (t.elder_medical_history ? '<tr><td class="text-muted">病史</td><td class="small">' + t.elder_medical_history + '</td></tr>' : '') +
+                                '</table></div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                completedInfo;
+
+            if (t.status === 'pending') {
+                footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button type="button" class="btn btn-success" onclick="completeTaskFromDetail(' + taskId + ')"><i class="bi bi-check-lg me-1"></i>确认完成</button>';
+            } else {
+                footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>';
+            }
+        } else {
+            body.innerHTML = '<div class="alert alert-danger">' + (result.msg || '加载失败') + '</div>';
+        }
+    } catch (error) {
+        body.innerHTML = '<div class="alert alert-danger">' + (error.message || '加载任务详情失败') + '</div>';
+    }
+}
+
+async function completeTaskFromDetail(taskId) {
+    if (!confirm('确认完成此任务？完成后状态不可撤销。')) return;
+
+    try {
+        const result = await LoadingUtils.safeFetch('/api/v1/care-tasks/' + taskId + '/complete', {
+            method: 'PUT'
+        });
+
+        if (result.code === 200) {
+            showToast('任务已完成！完成人：' + (result.data.completed_by_name || '当前用户'), 'success');
+            taskDetailModal.hide();
+            loadDashboardData();
+        } else {
+            showToast(result.msg || '操作失败', 'danger');
+        }
+    } catch (error) {
+        showToast(error.message || '操作失败，请重试', 'danger');
+    }
+}
+
+function openQuickRecordModal(elderId, elderName) {
+    document.getElementById('quickRecordElderId').value = elderId;
+    document.getElementById('quickRecordElderName').value = elderName;
+    document.getElementById('quickRecordForm').reset();
+    document.getElementById('quickRecordElderName').value = elderName;
+    quickRecordModal.show();
+}
+
+async function submitQuickRecord() {
+    const elderId = document.getElementById('quickRecordElderId').value;
+    const elderName = document.getElementById('quickRecordElderName').value;
+
+    if (!elderId) {
+        showToast('请选择老人', 'warning');
+        return;
+    }
+
+    const healthData = {};
+
+    const temp = parseFloat(document.getElementById('quickRecordTemp').value);
+    if (!isNaN(temp)) healthData.temperature = temp;
+
+    const heartRate = parseInt(document.getElementById('quickRecordHeartRate').value);
+    if (!isNaN(heartRate)) healthData.heart_rate = heartRate;
+
+    const systolic = parseInt(document.getElementById('quickRecordSystolic').value);
+    if (!isNaN(systolic)) healthData.systolic_pressure = systolic;
+
+    const diastolic = parseInt(document.getElementById('quickRecordDiastolic').value);
+    if (!isNaN(diastolic)) healthData.diastolic_pressure = diastolic;
+
+    const bloodSugar = parseFloat(document.getElementById('quickRecordBloodSugar').value);
+    if (!isNaN(bloodSugar)) healthData.blood_sugar = bloodSugar;
+
+    if (Object.keys(healthData).length === 0) {
+        showToast('请至少填写一项健康数据', 'warning');
+        return;
+    }
+
+    if (window.FormValidator) {
+        var tempVal = parseFloat(document.getElementById('quickRecordTemp').value);
+        var hrVal = parseInt(document.getElementById('quickRecordHeartRate').value);
+        var sysVal = parseInt(document.getElementById('quickRecordSystolic').value);
+        var diaVal = parseInt(document.getElementById('quickRecordDiastolic').value);
+        var bsVal = parseFloat(document.getElementById('quickRecordBloodSugar').value);
+
+        if (!isNaN(tempVal) && (tempVal < 35 || tempVal > 42)) {
+            showToast('体温范围应在35-42℃之间', 'warning');
+            return;
+        }
+        if (!isNaN(hrVal) && (hrVal < 40 || hrVal > 200)) {
+            showToast('心率范围应在40-200bpm之间', 'warning');
+            return;
+        }
+        if (!isNaN(sysVal) && (sysVal < 60 || sysVal > 200)) {
+            showToast('收缩压范围应在60-200mmHg之间', 'warning');
+            return;
+        }
+        if (!isNaN(diaVal) && (diaVal < 40 || diaVal > 120)) {
+            showToast('舒张压范围应在40-120mmHg之间', 'warning');
+            return;
+        }
+        if (!isNaN(bsVal) && (bsVal < 2 || bsVal > 30)) {
+            showToast('血糖范围应在2-30mmol/L之间', 'warning');
+            return;
+        }
+    }
+
+    try {
+        const result = await LoadingUtils.safeFetch('/api/v1/care-records', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                elder_id: parseInt(elderId),
+                record_date: new Date().toISOString().split('T')[0],
+                health_data: healthData,
+                notes: document.getElementById('quickRecordNotes').value
+            })
+        });
+
+        if (result.code === 200) {
+            showToast('护理记录提交成功', 'success');
+            quickRecordModal.hide();
+            loadDashboardData();
+        } else {
+            showToast(result.msg || '提交失败', 'danger');
+        }
+    } catch (error) {
+        showToast(error.message || '操作失败，请重试', 'danger');
+    }
+}
+
+function formatTime(timeStr) {
+    if (!timeStr) return '';
+    const date = new Date(timeStr);
+    const now = new Date();
+    const diff = (now - date) / 1000;
+
+    if (diff < 60) return '刚刚';
+    if (diff < 3600) return Math.round(diff / 60) + '分钟前';
+    if (diff < 86400) return Math.round(diff / 3600) + '小时前';
+
+    return date.toLocaleDateString('zh-CN');
+}
+</script>
+{% endblock %}

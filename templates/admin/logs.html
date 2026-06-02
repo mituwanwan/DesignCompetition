@@ -1,0 +1,529 @@
+{% extends "base.html" %}
+
+{% block title %}系统日志 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}系统日志{% endblock %}
+
+{% block sidebar %}
+    <a href="/admin"><i class="bi bi-house-door me-2"></i> 首页数据看板</a>
+    <a href="/admin/elders"><i class="bi bi-people me-2"></i> 老人信息管理</a>
+    <a href="/admin/users"><i class="bi bi-person-badge me-2"></i> 账号权限管理</a>
+    <a href="/admin/alarms"><i class="bi bi-exclamation-triangle me-2"></i> 异常报警中心</a>
+    <a href="/admin/visits"><i class="bi bi-calendar-check me-2"></i> 探视预约管理</a>
+    <a href="/admin/messages"><i class="bi bi-chat-left-text me-2"></i> 消息管理</a>
+    <a href="/admin/family-messages"><i class="bi bi-chat-heart me-2"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag me-2"></i> 异常上报管理</a>
+    <a href="/admin/reports"><i class="bi bi-bar-chart me-2"></i> 数据统计分析</a>
+    <a href="/admin/logs" class="active"><i class="bi bi-journal-text me-2"></i> 系统日志</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .log-sensitive { background-color: var(--warning-soft) !important; }
+    .log-anomaly { background-color: var(--danger-soft) !important; }
+    .filter-section { background: var(--bg-hover); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); }
+    .stat-card { border-radius: var(--radius-md); padding: var(--space-md); text-align: center; }
+    .stat-card h3 { margin: 5px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="stat-card bg-info text-white">
+                <h6><i class="bi bi-journal-text me-1"></i> 今日操作日志</h6>
+                <h3 id="todayOpCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-warning text-white">
+                <h6><i class="bi bi-shield-exclamation me-1"></i> 今日敏感操作</h6>
+                <h3 id="todaySensitiveCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-success text-white">
+                <h6><i class="bi bi-box-arrow-in-right me-1"></i> 今日登录成功</h6>
+                <h3 id="todayLoginSuccess">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-danger text-white">
+                <h6><i class="bi bi-exclamation-triangle me-1"></i> 今日登录失败</h6>
+                <h3 id="todayLoginFailed">--</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" id="tab-operation" data-type="operation">操作日志</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="tab-login" data-type="login">登录日志</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="filter-section">
+        <div class="row align-items-center">
+            <div id="operation-filters">
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <select class="form-select form-select-sm" id="filterModule">
+                            <option value="">全部模块</option>
+                            <option value="auth">认证</option>
+                            <option value="elders">老人</option>
+                            <option value="users">用户</option>
+                            <option value="care_tasks">任务</option>
+                            <option value="alarms">报警</option>
+                            <option value="visits">探视</option>
+                            <option value="alarm_rules">报警规则</option>
+                            <option value="incident_reports">异常上报</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select form-select-sm" id="filterAction">
+                            <option value="">全部操作</option>
+                            <option value="login">登录</option>
+                            <option value="logout">退出</option>
+                            <option value="create">创建</option>
+                            <option value="update">更新</option>
+                            <option value="delete">删除</option>
+                            <option value="password_reset">密码重置</option>
+                            <option value="lock">锁定</option>
+                            <option value="unlock">解锁</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select form-select-sm" id="filterUser">
+                            <option value="">全部用户</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <input type="date" class="form-control" id="filterStartDate">
+                            <span class="input-group-text">至</span>
+                            <input type="date" class="form-control" id="filterEndDate">
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <button class="btn btn-primary btn-sm me-1" id="searchBtn">
+                            <i class="bi bi-search"></i> 查询
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm me-1" id="resetBtn">
+                            <i class="bi bi-x-circle"></i> 重置
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" onclick="exportLogs()">
+                            <i class="bi bi-file-earmark-excel"></i> 导出Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="login-filters" class="d-none">
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <select class="form-select form-select-sm" id="filterLoginStatus">
+                            <option value="">全部状态</option>
+                            <option value="success">成功</option>
+                            <option value="failed">失败</option>
+                            <option value="locked">锁定</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select form-select-sm" id="filterLoginUser">
+                            <option value="">全部用户</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <input type="date" class="form-control" id="filterLoginStartDate">
+                            <span class="input-group-text">至</span>
+                            <input type="date" class="form-control" id="filterLoginEndDate">
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <button class="btn btn-primary btn-sm me-1" id="loginSearchBtn">
+                            <i class="bi bi-search"></i> 查询
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm me-1" id="loginResetBtn">
+                            <i class="bi bi-x-circle"></i> 重置
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" onclick="exportLoginLogs()">
+                            <i class="bi bi-file-earmark-excel"></i> 导出Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive bg-white p-3 rounded shadow-sm">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr id="operation-header">
+                    <th width="15%">操作时间</th>
+                    <th width="10%">操作人</th>
+                    <th width="10%">业务模块</th>
+                    <th width="10%">操作类型</th>
+                    <th width="28%">操作描述</th>
+                    <th width="10%">IP地址</th>
+                    <th width="7%">敏感</th>
+                    <th width="10%">详情</th>
+                </tr>
+                <tr id="login-header" class="d-none">
+                    <th width="15%">登录时间</th>
+                    <th width="10%">用户</th>
+                    <th width="10%">登录账号</th>
+                    <th width="10%">状态</th>
+                    <th width="25%">失败原因</th>
+                    <th width="10%">IP地址</th>
+                    <th width="20%">用户代理</th>
+                </tr>
+            </thead>
+            <tbody id="logsTableBody">
+                <tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-hourglass-split"></i> 加载中...</td></tr>
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted small" id="paginationInfo">第 1 页，共 1 页</div>
+            <nav><ul class="pagination pagination-sm mb-0" id="paginationNav"></ul></nav>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="logDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>日志详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="logDetailContent"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let currentTab = 'operation';
+const pageSize = 20;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadOperationLogs();
+    loadLogUsers();
+    loadLogStats();
+
+    document.getElementById('searchBtn').addEventListener('click', function() {
+        currentPage = 1;
+        loadOperationLogs();
+    });
+    document.getElementById('resetBtn').addEventListener('click', function() {
+        document.getElementById('filterModule').value = '';
+        document.getElementById('filterAction').value = '';
+        document.getElementById('filterUser').value = '';
+        document.getElementById('filterStartDate').value = '';
+        document.getElementById('filterEndDate').value = '';
+        currentPage = 1;
+        loadOperationLogs();
+    });
+    document.getElementById('loginSearchBtn').addEventListener('click', function() {
+        currentPage = 1;
+        loadLoginLogs();
+    });
+    document.getElementById('loginResetBtn').addEventListener('click', function() {
+        document.getElementById('filterLoginStatus').value = '';
+        document.getElementById('filterLoginUser').value = '';
+        document.getElementById('filterLoginStartDate').value = '';
+        document.getElementById('filterLoginEndDate').value = '';
+        currentPage = 1;
+        loadLoginLogs();
+    });
+
+    document.querySelectorAll('#tab-operation, #tab-login').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const type = this.getAttribute('data-type');
+            currentTab = type;
+            currentPage = 1;
+
+            document.querySelectorAll('.nav-tabs .nav-link').forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+
+            if (type === 'operation') {
+                document.getElementById('operation-header').classList.remove('d-none');
+                document.getElementById('login-header').classList.add('d-none');
+                document.getElementById('operation-filters').classList.remove('d-none');
+                document.getElementById('login-filters').classList.add('d-none');
+                loadOperationLogs();
+            } else {
+                document.getElementById('login-header').classList.remove('d-none');
+                document.getElementById('operation-header').classList.add('d-none');
+                document.getElementById('login-filters').classList.remove('d-none');
+                document.getElementById('operation-filters').classList.add('d-none');
+                loadLoginLogs();
+            }
+        });
+    });
+});
+
+function loadLogStats() {
+    const today = new Date().toISOString().slice(0, 10);
+    LoadingUtils.safeFetch(`/api/v1/logs?limit=1&start_time=${today}`).then(data => {
+        if (data.code === 200) {
+            document.getElementById('todayOpCount').textContent = data.data.total;
+        }
+    }).catch(() => {});
+    LoadingUtils.safeFetch(`/api/v1/logs/login?limit=1&start_time=${today}`).then(data => {
+        if (data.code === 200) {
+            document.getElementById('todayLoginSuccess').textContent = '-';
+            document.getElementById('todayLoginFailed').textContent = '-';
+        }
+    }).catch(() => {});
+}
+
+function loadLogUsers() {
+    LoadingUtils.safeFetch('/api/v1/logs/users').then(data => {
+        if (data.code === 200) {
+            const options = '<option value="">全部用户</option>' +
+                data.data.map(user => `<option value="${user.user_id}">${user.user_name}</option>`).join('');
+            document.getElementById('filterUser').innerHTML = options;
+            document.getElementById('filterLoginUser').innerHTML = options;
+        }
+    }).catch(err => {
+        showToast(err.message || '加载用户列表失败', 'danger');
+    });
+}
+
+function loadOperationLogs() {
+    const module = document.getElementById('filterModule').value;
+    const action = document.getElementById('filterAction').value;
+    const userId = document.getElementById('filterUser').value;
+    const startDate = document.getElementById('filterStartDate').value;
+    const endDate = document.getElementById('filterEndDate').value;
+
+    let url = `/api/v1/logs?page=${currentPage}&limit=${pageSize}`;
+    if (module) url += `&module=${module}`;
+    if (action) url += `&action=${action}`;
+    if (userId) url += `&user_id=${userId}`;
+    if (startDate) url += `&start_time=${startDate}`;
+    if (endDate) url += `&end_time=${endDate}`;
+
+    LoadingUtils.safeFetch(url).then(data => {
+        if (data.code === 200) {
+            renderOperationLogs(data.data.logs);
+            renderPagination(data.data.total, data.data.page);
+        }
+    }).catch(err => {
+        document.getElementById('logsTableBody').innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-exclamation-triangle"></i> ' + (err.message || '加载失败') + '</td></tr>';
+    });
+}
+
+function loadLoginLogs() {
+    const status = document.getElementById('filterLoginStatus').value;
+    const userId = document.getElementById('filterLoginUser').value;
+    const startDate = document.getElementById('filterLoginStartDate').value;
+    const endDate = document.getElementById('filterLoginEndDate').value;
+
+    let url = `/api/v1/logs/login?page=${currentPage}&limit=${pageSize}`;
+    if (status) url += `&status=${status}`;
+    if (userId) url += `&user_id=${userId}`;
+    if (startDate) url += `&start_time=${startDate}`;
+    if (endDate) url += `&end_time=${endDate}`;
+
+    LoadingUtils.safeFetch(url).then(data => {
+        if (data.code === 200) {
+            renderLoginLogs(data.data.logs);
+            renderPagination(data.data.total, data.data.page);
+        }
+    }).catch(err => {
+        document.getElementById('logsTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-exclamation-triangle"></i> ' + (err.message || '加载失败') + '</td></tr>';
+    });
+}
+
+const moduleMap = {
+    'auth': '认证', 'elders': '老人', 'users': '用户',
+    'care_tasks': '任务', 'alarms': '报警', 'visits': '探视',
+    'alarm_rules': '报警规则', 'incident_reports': '异常上报',
+    'care_records': '护理记录', 'family': '家属', 'system': '系统'
+};
+const actionMap = {
+    'login': '登录', 'logout': '退出', 'create': '创建',
+    'update': '更新', 'delete': '删除', 'password_reset': '密码重置',
+    'lock': '锁定', 'unlock': '解锁', 'batch_unlock': '批量解锁',
+    'toggle_lockout_policy': '切换锁定策略'
+};
+
+function renderOperationLogs(logs) {
+    const tbody = document.getElementById('logsTableBody');
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> 暂无日志</td></tr>';
+        return;
+    }
+
+    const sensitiveActions = ['delete', 'lock', 'unlock', 'password_reset'];
+    tbody.innerHTML = logs.map(log => {
+        const isSensitive = log.is_sensitive || sensitiveActions.includes(log.action);
+        const rowClass = isSensitive ? 'log-sensitive' : '';
+
+        return `<tr class="${rowClass}">
+            <td class="small">${log.created_at || '-'}</td>
+            <td class="fw-bold">
+                ${log.user_name || '系统'}
+            </td>
+            <td><span class="badge bg-info">${moduleMap[log.module] || log.module}</span></td>
+            <td><span class="badge bg-primary">${actionMap[log.action] || log.action}</span></td>
+            <td class="text-break">${log.description || '-'}</td>
+            <td class="small text-muted">${log.ip_address || '-'}</td>
+            <td>${isSensitive ? '<span class="badge bg-danger">是</span>' : '<span class="badge bg-light text-muted">否</span>'}</td>
+            <td>
+                <button class="btn btn-outline-primary btn-sm" onclick='showLogDetail(${JSON.stringify(log).replace(/'/g, "&#39;")})'>
+                    <i class="bi bi-eye"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderLoginLogs(logs) {
+    const tbody = document.getElementById('logsTableBody');
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox"></i> 暂无登录日志</td></tr>';
+        return;
+    }
+
+    const statusColors = {'success': 'bg-success', 'failed': 'bg-warning text-dark', 'locked': 'bg-danger'};
+    const statusTexts = {'success': '成功', 'failed': '失败', 'locked': '锁定'};
+
+    tbody.innerHTML = logs.map(log => {
+        const isWarning = log.login_status !== 'success';
+        const rowClass = isWarning ? 'log-anomaly' : '';
+        return `<tr class="${rowClass}">
+            <td class="small">${log.login_time || '-'}</td>
+            <td class="fw-bold">
+                ${log.user_name || log.username}
+                ${isWarning ? '<span class="badge bg-danger ms-1">异常</span>' : ''}
+            </td>
+            <td>${log.username || '-'}</td>
+            <td><span class="badge ${statusColors[log.login_status] || 'bg-secondary'}">
+                ${statusTexts[log.login_status] || log.login_status}
+            </span></td>
+            <td class="text-break text-muted small">${log.failure_reason || '-'}</td>
+            <td class="small text-muted">${log.ip_address || '-'}</td>
+            <td class="text-muted small text-truncate" style="max-width:200px;" title="${log.user_agent || '-'}">${log.user_agent || '-'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function showLogDetail(log) {
+    const content = document.getElementById('logDetailContent');
+    content.innerHTML = `
+        <div class="row">
+            <div class="col-md-6 mb-2">
+                <label class="fw-bold">操作人:</label> <span>${log.user_name || '系统'} (ID: ${log.user_id || '-'})</span>
+            </div>
+            <div class="col-md-6 mb-2">
+                <label class="fw-bold">操作时间:</label> <span>${log.created_at}</span>
+            </div>
+            <div class="col-md-6 mb-2">
+                <label class="fw-bold">业务模块:</label> <span class="badge bg-info">${moduleMap[log.module] || log.module}</span>
+            </div>
+            <div class="col-md-6 mb-2">
+                <label class="fw-bold">操作类型:</label> <span class="badge bg-primary">${actionMap[log.action] || log.action}</span>
+            </div>
+            <div class="col-md-12 mb-2">
+                <label class="fw-bold">操作描述:</label>
+                <div class="bg-light p-2 rounded">${log.description || '-'}</div>
+            </div>
+            <div class="col-md-6 mb-2">
+                <label class="fw-bold">IP地址:</label> <span>${log.ip_address || '-'}</span>
+            </div>
+            <div class="col-md-6 mb-2">
+                <label class="fw-bold">敏感操作:</label>
+                ${log.is_sensitive ? '<span class="badge bg-danger">是</span>' : '<span class="badge bg-secondary">否</span>'}
+            </div>
+            ${log.old_data ? `
+            <div class="col-md-12 mb-2">
+                <label class="fw-bold">修改前数据:</label>
+                <pre class="bg-light p-2 rounded small mb-0" style="max-height:150px;overflow:auto;">${log.old_data}</pre>
+            </div>` : ''}
+            ${log.new_data ? `
+            <div class="col-md-12 mb-2">
+                <label class="fw-bold">修改后数据:</label>
+                <pre class="bg-light p-2 rounded small mb-0" style="max-height:150px;overflow:auto;">${log.new_data}</pre>
+            </div>` : ''}
+        </div>
+    `;
+    new bootstrap.Modal(document.getElementById('logDetailModal')).show();
+}
+
+function renderPagination(total, page) {
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    document.getElementById('paginationInfo').textContent = `第 ${page} 页，共 ${totalPages} 页，共 ${total} 条`;
+
+    let html = '';
+    if (page > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${page - 1}); return false;">上一页</a></li>`;
+    }
+    for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++) {
+        html += `<li class="page-item ${i === page ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+        </li>`;
+    }
+    if (page < totalPages) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${page + 1}); return false;">下一页</a></li>`;
+    }
+    document.getElementById('paginationNav').innerHTML = html;
+}
+
+function goToPage(page) {
+    currentPage = page;
+    if (currentTab === 'operation') {
+        loadOperationLogs();
+    } else {
+        loadLoginLogs();
+    }
+}
+
+function exportLogs() {
+    const module = document.getElementById('filterModule').value;
+    const action = document.getElementById('filterAction').value;
+    const userId = document.getElementById('filterUser').value;
+    const startDate = document.getElementById('filterStartDate').value;
+    const endDate = document.getElementById('filterEndDate').value;
+
+    let url = '/api/v1/logs/export?';
+    if (module) url += `module=${module}&`;
+    if (action) url += `action=${action}&`;
+    if (userId) url += `user_id=${userId}&`;
+    if (startDate) url += `start_time=${startDate}&`;
+    if (endDate) url += `end_time=${endDate}&`;
+
+    window.location.href = url;
+    showToast('正在导出操作日志...', 'info');
+}
+
+function exportLoginLogs() {
+    const status = document.getElementById('filterLoginStatus').value;
+    const userId = document.getElementById('filterLoginUser').value;
+    const startDate = document.getElementById('filterLoginStartDate').value;
+    const endDate = document.getElementById('filterLoginEndDate').value;
+
+    let url = '/api/v1/logs/login/export?';
+    if (status) url += `status=${status}&`;
+    if (userId) url += `user_id=${userId}&`;
+    if (startDate) url += `start_time=${startDate}&`;
+    if (endDate) url += `end_time=${endDate}&`;
+
+    window.location.href = url;
+    showToast('正在导出登录日志...', 'info');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,609 @@
+{% extends "base.html" %}
+
+{% block title %}健康记录 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}健康记录{% endblock %}
+
+{% block sidebar %}
+    <a href="/caregiver"><i class="bi bi-house-door"></i> 工作台</a>
+    <a href="/caregiver/tasks"><i class="bi bi-calendar-check"></i> 护理任务</a>
+    <a href="/caregiver/health-records" class="active"><i class="bi bi-heart-pulse"></i> 健康记录</a>
+    <a href="/caregiver/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/caregiver/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/caregiver/incident-reports"><i class="bi bi-exclamation-triangle"></i> 异常上报</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .health-input-group { background: var(--bg-hover); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); }
+    .health-input-group h6 { color: var(--text-primary); border-bottom: 1px solid var(--border-light); padding-bottom: var(--space-sm); margin-bottom: 12px; }
+    .field-error { color: var(--danger); font-size: var(--fs-xs); margin-top: var(--space-2xs); display: none; }
+    .field-error.show { display: block; }
+    .form-control.is-invalid, .form-select.is-invalid { border-color: var(--danger); }
+    .form-control.is-valid, .form-select.is-valid { border-color: var(--success); }
+    .required-star { color: var(--danger); font-weight: bold; }
+    .emotion-btn { border: 2px solid var(--border-light); border-radius: var(--radius-md); padding: var(--space-sm) var(--space-md); cursor: pointer; transition: all var(--transition-normal); background: var(--bg-card); }
+    .emotion-btn:hover { border-color: var(--primary); background: var(--primary-soft); }
+    .emotion-btn.active { border-color: var(--primary); background: var(--primary); color: var(--text-white); }
+    .emotion-btn .emotion-icon { font-size: var(--fs-2xl); display: block; }
+    .emotion-btn .emotion-label { font-size: var(--fs-xs); display: block; margin-top: var(--space-2xs); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <ul class="nav nav-tabs mb-4" id="recordTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="view-tab" data-bs-toggle="tab" data-bs-target="#viewTab" type="button">查看记录</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="submit-tab" data-bs-toggle="tab" data-bs-target="#submitTab" type="button">提交记录</button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- 查看记录 -->
+        <div class="tab-pane fade show active" id="viewTab">
+            <div class="row mb-3 align-items-center">
+                <div class="col-md-10">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" id="viewElderKeyword" placeholder="老人姓名/ID搜索">
+                        </div>
+                        <div class="col-md-2">
+                            <input type="date" class="form-control" id="viewStartDate" placeholder="开始日期">
+                        </div>
+                        <div class="col-md-2">
+                            <input type="date" class="form-control" id="viewEndDate" placeholder="结束日期">
+                        </div>
+                        <div class="col-md-1">
+                            <button class="btn btn-outline-primary w-100" id="viewSearchBtn"><i class="bi bi-search"></i></button>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100" id="viewSubmitBtn"><i class="bi bi-plus-lg me-1"></i>新记录</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2 text-muted small text-end">
+                    <span id="viewPaginationInfo"></span>
+                </div>
+            </div>
+
+            <div class="table-responsive bg-white p-3 rounded shadow-sm">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>老人</th>
+                            <th>日期</th>
+                            <th>体温</th>
+                            <th>心率</th>
+                            <th>血压</th>
+                            <th>血糖</th>
+                            <th>饮食</th>
+                            <th>睡眠</th>
+                            <th>情绪</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recordsTableBody">
+                        <tr><td colspan="10" class="text-center text-muted py-4">点击搜索加载记录</td></tr>
+                    </tbody>
+                </table>
+                <nav><ul class="pagination pagination-sm justify-content-center" id="viewPaginationNav"></ul></nav>
+            </div>
+        </div>
+
+        <!-- 提交记录 -->
+        <div class="tab-pane fade" id="submitTab">
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header"><h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>提交护理记录</h5></div>
+                        <div class="card-body">
+                            <form id="recordForm" novalidate>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">老人 <span class="required-star">*</span></label>
+                                        <select class="form-select" id="recordElderId" required>
+                                            <option value="">请选择老人</option>
+                                        </select>
+                                        <div class="field-error" id="err_elder">请选择老人</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">记录日期 <span class="required-star">*</span></label>
+                                        <input type="date" class="form-control" id="recordDate" required>
+                                        <div class="field-error" id="err_date">请选择记录日期</div>
+                                    </div>
+                                </div>
+
+                                <div class="health-input-group">
+                                    <h6><i class="bi bi-heart-pulse me-2"></i>健康数据 <small class="text-muted">（带 <span class="required-star">*</span> 为必填项）</small></h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label">体温 (°C) <span class="required-star">*</span></label>
+                                            <input type="number" class="form-control" id="h_temperature" step="0.1" min="35" max="42" placeholder="35-42">
+                                            <div class="field-error" id="err_temperature"></div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">心率 (bpm) <span class="required-star">*</span></label>
+                                            <input type="number" class="form-control" id="h_heartRate" min="40" max="200" placeholder="40-200">
+                                            <div class="field-error" id="err_heartRate"></div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">血糖 (mmol/L) <span class="required-star">*</span></label>
+                                            <input type="number" class="form-control" id="h_bloodSugar" step="0.1" min="2" max="30" placeholder="2.0-30.0">
+                                            <div class="field-error" id="err_bloodSugar"></div>
+                                        </div>
+                                        <div class="col-md-4 mt-2">
+                                            <label class="form-label">收缩压 (mmHg) <span class="required-star">*</span></label>
+                                            <input type="number" class="form-control" id="h_systolic" min="60" max="200" placeholder="60-200">
+                                            <div class="field-error" id="err_systolic"></div>
+                                        </div>
+                                        <div class="col-md-4 mt-2">
+                                            <label class="form-label">舒张压 (mmHg) <span class="required-star">*</span></label>
+                                            <input type="number" class="form-control" id="h_diastolic" min="40" max="120" placeholder="40-120">
+                                            <div class="field-error" id="err_diastolic"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="health-input-group">
+                                    <h6><i class="bi bi-cup-hot me-2"></i>三餐饮食记录</h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="form-label">早餐</label>
+                                            <input type="text" class="form-control" id="d_breakfast" placeholder="如：正常进食、粥+鸡蛋" maxlength="100">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">午餐</label>
+                                            <input type="text" class="form-control" id="d_lunch" placeholder="如：较少、米饭+蔬菜" maxlength="100">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">晚餐</label>
+                                            <input type="text" class="form-control" id="d_dinner" placeholder="如：未进食、面条" maxlength="100">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="health-input-group">
+                                    <h6><i class="bi bi-moon me-2"></i>睡眠情况</h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label">睡眠时长 (小时)</label>
+                                            <input type="number" class="form-control" id="s_duration" min="0" max="24" step="0.5" placeholder="0-24">
+                                            <div class="field-error" id="err_sleep_duration"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">睡眠质量</label>
+                                            <select class="form-select" id="s_quality">
+                                                <option value="">请选择</option>
+                                                <option value="good">良好</option>
+                                                <option value="average">一般</option>
+                                                <option value="poor">较差</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="health-input-group">
+                                    <h6><i class="bi bi-emoji-smile me-2"></i>情绪状态</h6>
+                                    <div class="d-flex gap-2 flex-wrap" id="emotionSelector">
+                                        <button type="button" class="emotion-btn" data-value="happy">
+                                            <span class="emotion-icon">😊</span>
+                                            <span class="emotion-label">愉快</span>
+                                        </button>
+                                        <button type="button" class="emotion-btn" data-value="calm">
+                                            <span class="emotion-icon">😌</span>
+                                            <span class="emotion-label">平静</span>
+                                        </button>
+                                        <button type="button" class="emotion-btn" data-value="low">
+                                            <span class="emotion-icon">😔</span>
+                                            <span class="emotion-label">低落</span>
+                                        </button>
+                                        <button type="button" class="emotion-btn" data-value="agitated">
+                                            <span class="emotion-icon">😤</span>
+                                            <span class="emotion-label">烦躁</span>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" id="e_status" value="">
+                                </div>
+
+                                <div class="text-end mt-4">
+                                    <button type="button" class="btn btn-secondary me-2" id="resetFormBtn">重置</button>
+                                    <button type="button" class="btn btn-primary" id="submitRecordBtn"><i class="bi bi-check-lg"></i> 提交记录</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 记录详情模态框 -->
+<div class="modal fade" id="recordDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">护理记录详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="recordDetailBody">
+                <div class="text-center py-3"><i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i><p class="text-muted">加载中...</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let recordsPage = 1;
+    const pageSize = 20;
+    let selectedEmotion = '';
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadElders();
+        document.getElementById('recordDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('viewSearchBtn').addEventListener('click', function() { loadRecords(1); });
+        document.getElementById('viewSubmitBtn').addEventListener('click', function() {
+            resetForm();
+            document.getElementById('submit-tab').click();
+        });
+        document.getElementById('submitRecordBtn').addEventListener('click', submitRecord);
+        document.getElementById('resetFormBtn').addEventListener('click', resetForm);
+
+        document.querySelectorAll('#emotionSelector .emotion-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('#emotionSelector .emotion-btn').forEach(function(b) { b.classList.remove('active'); });
+                this.classList.add('active');
+                selectedEmotion = this.dataset.value;
+                document.getElementById('e_status').value = selectedEmotion;
+            });
+        });
+
+        setupRealtimeValidation();
+
+        if (window.FormValidator) {
+            FormValidator.setupForm('#healthRecordForm', {
+                '#h_temperature': ['required', { rule: 'range', args: [35, 42] }],
+                '#h_heart_rate': ['required', { rule: 'range', args: [40, 200] }],
+                '#h_systolic_pressure': ['required', { rule: 'range', args: [60, 200] }],
+                '#h_diastolic_pressure': ['required', { rule: 'range', args: [40, 120] }],
+                '#h_blood_sugar': [{ rule: 'range', args: [2, 30] }],
+                '#s_duration': [{ rule: 'range', args: [0, 24] }],
+                '#recordDate': ['required', 'date']
+            });
+        }
+
+        if (window.InteractionUtils) {
+            InteractionUtils.trackForm('#healthRecordForm');
+        }
+
+        document.getElementById('viewElderKeyword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') loadRecords(1);
+        });
+    });
+
+    function setupRealtimeValidation() {
+        var fields = [
+            { id: 'h_temperature', errId: 'err_temperature', required: true, min: 35, max: 42, minMsg: '体温值必须在35-42℃之间', maxMsg: '体温值必须在35-42℃之间', reqMsg: '体温为必填项' },
+            { id: 'h_heartRate', errId: 'err_heartRate', required: true, min: 40, max: 200, minMsg: '心率值必须在40-200bpm之间', maxMsg: '心率值必须在40-200bpm之间', reqMsg: '心率为必填项' },
+            { id: 'h_systolic', errId: 'err_systolic', required: true, min: 60, max: 200, minMsg: '血压值必须在60-200mmHg之间', maxMsg: '血压值必须在60-200mmHg之间', reqMsg: '收缩压为必填项' },
+            { id: 'h_diastolic', errId: 'err_diastolic', required: true, min: 40, max: 120, minMsg: '舒张压必须在40-120mmHg之间', maxMsg: '舒张压必须在40-120mmHg之间', reqMsg: '舒张压为必填项' },
+            { id: 'h_bloodSugar', errId: 'err_bloodSugar', required: true, min: 2, max: 30, minMsg: '血糖值必须在2.0-30.0mmol/L之间', maxMsg: '血糖值必须在2.0-30.0mmol/L之间', reqMsg: '血糖为必填项' },
+            { id: 's_duration', errId: 'err_sleep_duration', required: false, min: 0, max: 24, minMsg: '睡眠时长必须在0-24之间', maxMsg: '睡眠时长必须在0-24之间' }
+        ];
+
+        fields.forEach(function(f) {
+            var input = document.getElementById(f.id);
+            if (!input) return;
+            input.addEventListener('input', function() { validateField(f); });
+            input.addEventListener('blur', function() { validateField(f); });
+        });
+    }
+
+    function validateField(f) {
+        var input = document.getElementById(f.id);
+        var errEl = document.getElementById(f.errId);
+        if (!input || !errEl) return true;
+
+        var val = input.value.trim();
+
+        if (f.required && (val === '')) {
+            errEl.textContent = f.reqMsg;
+            errEl.classList.add('show');
+            input.classList.add('is-invalid');
+            input.classList.remove('is-valid');
+            return false;
+        }
+
+        if (val !== '') {
+            var num = parseFloat(val);
+            if (isNaN(num)) {
+                errEl.textContent = '请输入有效数值';
+                errEl.classList.add('show');
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                return false;
+            }
+            if (f.min !== undefined && num < f.min) {
+                errEl.textContent = f.minMsg;
+                errEl.classList.add('show');
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                return false;
+            }
+            if (f.max !== undefined && num > f.max) {
+                errEl.textContent = f.maxMsg;
+                errEl.classList.add('show');
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                return false;
+            }
+        }
+
+        errEl.classList.remove('show');
+        input.classList.remove('is-invalid');
+        if (val !== '') input.classList.add('is-valid');
+        else input.classList.remove('is-valid');
+        return true;
+    }
+
+    function validateAllFields() {
+        var allValid = true;
+
+        var elderId = document.getElementById('recordElderId').value;
+        var errElder = document.getElementById('err_elder');
+        if (!elderId) {
+            errElder.classList.add('show');
+            document.getElementById('recordElderId').classList.add('is-invalid');
+            allValid = false;
+        } else {
+            errElder.classList.remove('show');
+            document.getElementById('recordElderId').classList.remove('is-invalid');
+        }
+
+        var recordDate = document.getElementById('recordDate').value;
+        var errDate = document.getElementById('err_date');
+        if (!recordDate) {
+            errDate.classList.add('show');
+            document.getElementById('recordDate').classList.add('is-invalid');
+            allValid = false;
+        } else {
+            errDate.classList.remove('show');
+            document.getElementById('recordDate').classList.remove('is-invalid');
+        }
+
+        var fields = [
+            { id: 'h_temperature', errId: 'err_temperature', required: true, min: 35, max: 42, minMsg: '体温值必须在35-42℃之间', maxMsg: '体温值必须在35-42℃之间', reqMsg: '体温为必填项' },
+            { id: 'h_heartRate', errId: 'err_heartRate', required: true, min: 40, max: 200, minMsg: '心率值必须在40-200bpm之间', maxMsg: '心率值必须在40-200bpm之间', reqMsg: '心率为必填项' },
+            { id: 'h_systolic', errId: 'err_systolic', required: true, min: 60, max: 200, minMsg: '血压值必须在60-200mmHg之间', maxMsg: '血压值必须在60-200mmHg之间', reqMsg: '收缩压为必填项' },
+            { id: 'h_diastolic', errId: 'err_diastolic', required: true, min: 40, max: 120, minMsg: '舒张压必须在40-120mmHg之间', maxMsg: '舒张压必须在40-120mmHg之间', reqMsg: '舒张压为必填项' },
+            { id: 'h_bloodSugar', errId: 'err_bloodSugar', required: true, min: 2, max: 30, minMsg: '血糖值必须在2.0-30.0mmol/L之间', maxMsg: '血糖值必须在2.0-30.0mmol/L之间', reqMsg: '血糖为必填项' },
+            { id: 's_duration', errId: 'err_sleep_duration', required: false, min: 0, max: 24, minMsg: '睡眠时长必须在0-24之间', maxMsg: '睡眠时长必须在0-24之间' }
+        ];
+
+        fields.forEach(function(f) {
+            if (!validateField(f)) allValid = false;
+        });
+
+        return allValid;
+    }
+
+    function resetForm() {
+        document.getElementById('recordForm').reset();
+        document.getElementById('recordDate').value = new Date().toISOString().split('T')[0];
+        selectedEmotion = '';
+        document.getElementById('e_status').value = '';
+        document.querySelectorAll('#emotionSelector .emotion-btn').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.field-error').forEach(function(el) { el.classList.remove('show'); });
+        document.querySelectorAll('.is-invalid, .is-valid').forEach(function(el) {
+            el.classList.remove('is-invalid');
+            el.classList.remove('is-valid');
+        });
+    }
+
+    function loadElders() {
+        LoadingUtils.safeFetch('/api/v1/users/my-assigned-elders')
+            .then(data => {
+                if (data.code === 200) {
+                    const elders = data.data || [];
+                    const sel = document.getElementById('recordElderId');
+                    sel.innerHTML = '<option value="">请选择老人</option>' +
+                        elders.map(e => `<option value="${e.id}">${e.name} (${e.room_number})</option>`).join('');
+                }
+            })
+            .catch(err => showToast(err.message || '加载老人列表失败', 'danger'));
+    }
+
+    function loadRecords(page) {
+        recordsPage = page;
+        const keyword = document.getElementById('viewElderKeyword').value.trim();
+        const startDate = document.getElementById('viewStartDate').value;
+        const endDate = document.getElementById('viewEndDate').value;
+
+        let url = `/api/v1/care-records?page=${page}&page_size=${pageSize}`;
+        if (keyword) url += `&elder_keyword=${encodeURIComponent(keyword)}`;
+        if (startDate) url += `&start_date=${startDate}`;
+        if (endDate) url += `&end_date=${endDate}`;
+
+        LoadingUtils.safeFetch(url).then(data => {
+            if (data.code === 200) {
+                renderRecords(data.data.list);
+                renderPagination(data.data.pagination);
+            } else {
+                showRecordsError(data.msg);
+            }
+        }).catch(err => {
+            const container = document.getElementById('recordsTableBody');
+            LoadingUtils.showError(container, err.message || '加载记录失败，请刷新重试', function() { loadRecords(recordsPage); });
+        });
+    }
+
+    function renderRecords(records) {
+        const tbody = document.getElementById('recordsTableBody');
+        if (!records || records.length === 0) {
+            LoadingUtils.showEmpty(tbody, '暂无护理记录');
+            return;
+        }
+        const emotionMap = {happy:'😊愉快', calm:'😌平静', low:'😔低落', agitated:'😤烦躁'};
+        let html = '';
+        records.forEach(r => {
+            const health = r.health_data || {};
+            const diet = r.diet || {};
+            const sleep = r.sleep || {};
+            const emotion = r.emotion || {};
+            const temp = health.temperature ? `${health.temperature}°C` : '-';
+            const hr = health.heart_rate ? `${health.heart_rate} bpm` : '-';
+            const bp = health.systolic_pressure ? `${health.systolic_pressure}/${health.diastolic_pressure || '-'}` : '-';
+            const bs = health.blood_sugar ? `${health.blood_sugar}` : '-';
+            const dietText = [diet.breakfast, diet.lunch, diet.dinner].filter(Boolean).join(' / ') || '-';
+            const sleepText = sleep.duration ? `${sleep.duration}h` : '-';
+            const emotionText = emotion.status ? (emotionMap[emotion.status] || emotion.status) : '-';
+            html += `<tr>
+                <td>${r.elder_name || '-'}<small class="text-muted d-block">${r.room_number || ''}房</small></td>
+                <td>${r.record_date}</td>
+                <td>${temp}</td>
+                <td>${hr}</td>
+                <td>${bp}</td>
+                <td>${bs}</td>
+                <td><small>${dietText}</small></td>
+                <td>${sleepText}</td>
+                <td>${emotionText}</td>
+                <td><button class="btn btn-sm btn-outline-info" onclick="viewRecord(${r.id})"><i class="bi bi-eye"></i></button></td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function showRecordsError(msg) {
+        document.getElementById('recordsTableBody').innerHTML =
+            `<tr><td colspan="10" class="text-center text-danger py-4">${msg}</td></tr>`;
+    }
+
+    function renderPagination(p) {
+        document.getElementById('viewPaginationInfo').textContent = `共 ${p.total} 条`;
+        let html = '';
+        if (p.page > 1) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page - 1}">上一页</a></li>`;
+        for (let i = Math.max(1, p.page - 2); i <= Math.min(p.total_pages, p.page + 2); i++) {
+            html += `<li class="page-item ${i === p.page ? 'active' : ''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+        }
+        if (p.page < p.total_pages) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page + 1}">下一页</a></li>`;
+        document.getElementById('viewPaginationNav').innerHTML = html;
+        document.querySelectorAll('#viewPaginationNav .page-link').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(this.dataset.page);
+                if (!isNaN(page)) loadRecords(page);
+            });
+        });
+    }
+
+    function viewRecord(id) {
+        const body = document.getElementById('recordDetailBody');
+        body.innerHTML = `<div class="text-center py-3"><i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i><p class="text-muted">加载中...</p></div>`;
+        const modal = new bootstrap.Modal(document.getElementById('recordDetailModal'));
+        modal.show();
+        LoadingUtils.safeFetch(`/api/v1/care-records/${id}`).then(data => {
+            if (data.code === 200) {
+                const r = data.data;
+                const h = r.health_data || {};
+                const d = r.diet || {};
+                const s = r.sleep || {};
+                const e = r.emotion || {};
+                const emotionMap = {happy:'😊 愉快', calm:'😌 平静', low:'😔 低落', agitated:'😤 烦躁'};
+                const qualityMap = {good:'良好', average:'一般', poor:'较差'};
+                body.innerHTML = `
+                    <div class="table-responsive"><table class="table table-bordered">
+                        <tr><th style="background:var(--bg-hover)">老人</th><td>${r.elder_name || '-'} ${r.room_number ? r.room_number + '房' : ''} ${r.bed_number ? r.bed_number + '床' : ''}</td></tr>
+                        <tr><th style="background:var(--bg-hover)">护工</th><td>${r.caregiver_name || '-'}</td></tr>
+                        <tr><th style="background:var(--bg-hover)">日期</th><td>${r.record_date}</td></tr>
+                        <tr><th colspan="2" class="text-center" style="background:var(--info-soft)"><i class="bi bi-heart-pulse me-1"></i>健康数据</th></tr>
+                        <tr><th style="background:var(--bg-hover)">体温</th><td>${h.temperature ? h.temperature + '°C' : '-'}</td></tr>
+                        <tr><th style="background:var(--bg-hover)">心率</th><td>${h.heart_rate ? h.heart_rate + ' bpm' : '-'}</td></tr>
+                        <tr><th style="background:var(--bg-hover)">血压</th><td>${h.systolic_pressure ? h.systolic_pressure + '/' + (h.diastolic_pressure || '-') + ' mmHg' : '-'}</td></tr>
+                        <tr><th style="background:var(--bg-hover)">血糖</th><td>${h.blood_sugar ? h.blood_sugar + ' mmol/L' : '-'}</td></tr>
+                        <tr><th colspan="2" class="text-center" style="background:var(--warning-soft)"><i class="bi bi-cup-hot me-1"></i>饮食记录</th></tr>
+                        <tr><th style="background:var(--bg-hover)">早餐</th><td>${d.breakfast || '-'}</td></tr>
+                        <tr><th style="background:var(--bg-hover)">午餐</th><td>${d.lunch || '-'}</td></tr>
+                        <tr><th style="background:var(--bg-hover)">晚餐</th><td>${d.dinner || '-'}</td></tr>
+                        <tr><th colspan="2" class="text-center" style="background:var(--primary-soft)"><i class="bi bi-moon me-1"></i>睡眠情况</th></tr>
+                        <tr><th style="background:var(--bg-hover)">睡眠时长</th><td>${s.duration ? s.duration + '小时' : '-'}</td></tr>
+                        <tr><th style="background:var(--bg-hover)">睡眠质量</th><td>${s.quality ? qualityMap[s.quality] || s.quality : '-'}</td></tr>
+                        <tr><th colspan="2" class="text-center" style="background:var(--success-soft)"><i class="bi bi-emoji-smile me-1"></i>情绪状态</th></tr>
+                        <tr><th style="background:var(--bg-hover)">情绪</th><td>${e.status ? emotionMap[e.status] || e.status : '-'}</td></tr>
+                    </table></div>`;
+            } else { body.innerHTML = `<div class="alert alert-danger">${data.msg}</div>`; }
+        }).catch(err => LoadingUtils.showError(body, err.message || '加载记录详情失败', function() { viewRecord(id); }));
+    }
+
+    function submitRecord() {
+        if (!validateAllFields()) {
+            showToast('请修正表单中的错误后再提交', 'warning');
+            return;
+        }
+
+        const elderId = document.getElementById('recordElderId').value;
+        const recordDate = document.getElementById('recordDate').value;
+
+        const healthData = {
+            temperature: parseFloat(document.getElementById('h_temperature').value),
+            heart_rate: parseInt(document.getElementById('h_heartRate').value),
+            systolic_pressure: parseInt(document.getElementById('h_systolic').value),
+            diastolic_pressure: parseInt(document.getElementById('h_diastolic').value),
+            blood_sugar: parseFloat(document.getElementById('h_bloodSugar').value)
+        };
+
+        const diet = {};
+        const db = document.getElementById('d_breakfast').value.trim();
+        const dl = document.getElementById('d_lunch').value.trim();
+        const dd = document.getElementById('d_dinner').value.trim();
+        if (db) diet.breakfast = db;
+        if (dl) diet.lunch = dl;
+        if (dd) diet.dinner = dd;
+
+        const sleep = {};
+        const sd = document.getElementById('s_duration').value;
+        const sq = document.getElementById('s_quality').value;
+        if (sd) sleep.duration = parseFloat(sd);
+        if (sq) sleep.quality = sq;
+
+        const emotion = {};
+        const es = document.getElementById('e_status').value;
+        if (es) emotion.status = es;
+
+        const payload = {
+            elder_id: parseInt(elderId),
+            record_date: recordDate,
+            health_data: healthData,
+            diet: diet,
+            sleep: sleep,
+            emotion: emotion
+        };
+
+        document.getElementById('submitRecordBtn').disabled = true;
+        document.getElementById('submitRecordBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> 提交中...';
+
+        LoadingUtils.safeFetch('/api/v1/care-records', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        }).then(data => {
+            if (data.code === 200) {
+                showToast(data.msg || '护理记录提交成功！', 'success');
+                resetForm();
+                document.getElementById('view-tab').click();
+                loadRecords(1);
+            } else {
+                showToast(data.msg || '提交失败', 'danger');
+            }
+        }).catch(err => showToast(err.message || '操作失败，请重试', 'danger'))
+        .finally(() => {
+            document.getElementById('submitRecordBtn').disabled = false;
+            document.getElementById('submitRecordBtn').innerHTML = '<i class="bi bi-check-lg"></i> 提交记录';
+        });
+    }
+</script>
+{% endblock %}

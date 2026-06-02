@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}亲情留言监管 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}亲情留言监管{% endblock %}
+
+{% block sidebar %}
+    <a href="/admin"><i class="bi bi-house-door me-2"></i> 首页数据看板</a>
+    <a href="/admin/elders"><i class="bi bi-people me-2"></i> 老人信息管理</a>
+    <a href="/admin/users"><i class="bi bi-person-badge me-2"></i> 账号权限管理</a>
+    <a href="/admin/alarms"><i class="bi bi-exclamation-triangle me-2"></i> 异常报警中心</a>
+    <a href="/admin/visits"><i class="bi bi-calendar-check me-2"></i> 探视预约管理</a>
+    <a href="/admin/messages"><i class="bi bi-chat-left-text me-2"></i> 消息管理</a>
+    <a href="/admin/family-messages" class="active"><i class="bi bi-chat-heart me-2"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag me-2"></i> 异常上报管理</a>
+    <a href="/admin/reports"><i class="bi bi-bar-chart me-2"></i> 数据统计分析</a>
+    <a href="/admin/logs"><i class="bi bi-journal-text me-2"></i> 系统日志</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card { border-radius: var(--radius-md); padding: var(--space-md); text-align: center; }
+    .stat-card h3 { margin: 5px 0; }
+    .filter-section { background: var(--bg-hover); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); }
+    .msg-family-row { border-left: 3px solid var(--success); }
+    .msg-caregiver-row { border-left: 3px solid var(--primary); }
+    .voice-badge { display: inline-flex; align-items: center; gap: 4px; background: var(--primary-soft); color: var(--primary); padding: 2px 8px; border-radius: var(--radius-full); font-size: var(--fs-xs); }
+    .readonly-hint { background: var(--warning-soft); border-left: 4px solid var(--warning); padding: 8px 14px; border-radius: var(--radius-md); margin-bottom: var(--space-md); font-size: var(--fs-sm); color: var(--warning-active); display: flex; align-items: center; gap: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="readonly-hint">
+        <i class="bi bi-shield-lock"></i>
+        <span>监管模式：仅可查看所有亲情留言，不可修改或删除任何留言内容</span>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="stat-card bg-primary text-white">
+                <h6><i class="bi bi-chat-heart me-1"></i> 总留言数</h6>
+                <h3 id="totalMsgCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-success text-white">
+                <h6><i class="bi bi-person me-1"></i> 家属留言</h6>
+                <h3 id="familyMsgCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-info text-white">
+                <h6><i class="bi bi-person-badge me-1"></i> 护工留言</h6>
+                <h3 id="caregiverMsgCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-warning text-white">
+                <h6><i class="bi bi-mic me-1"></i> 语音留言</h6>
+                <h3 id="voiceMsgCount">--</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-section">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterElder">
+                    <option value="">全部老人</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterSenderType">
+                    <option value="">全部发送者</option>
+                    <option value="family">家属</option>
+                    <option value="caregiver">护工</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="date" class="form-control form-control-sm" id="filterStartDate" placeholder="开始日期">
+            </div>
+            <div class="col-md-2">
+                <input type="date" class="form-control form-control-sm" id="filterEndDate" placeholder="结束日期">
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-primary btn-sm me-1" id="searchBtn"><i class="bi bi-search"></i> 查询</button>
+                <button class="btn btn-outline-secondary btn-sm" id="resetBtn"><i class="bi bi-x-circle"></i> 重置</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive bg-white p-3 rounded shadow-sm">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>老人</th>
+                    <th>房间号</th>
+                    <th>发送者</th>
+                    <th>发送者类型</th>
+                    <th>接收者</th>
+                    <th>消息类型</th>
+                    <th>消息内容</th>
+                    <th>已读</th>
+                    <th>发送时间</th>
+                </tr>
+            </thead>
+            <tbody id="messagesTableBody">
+                <tr><td colspan="10" class="text-center text-muted py-4"><i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>正在加载...</td></tr>
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted small" id="paginationInfo">第 1 页，共 1 页</div>
+            <nav><ul class="pagination pagination-sm mb-0" id="paginationNav"></ul></nav>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentPage = 1;
+    const pageSize = 20;
+    let autoRefreshTimer = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMessages(1);
+        loadStats();
+        loadElderOptions();
+
+        document.getElementById('searchBtn').addEventListener('click', function() { currentPage = 1; loadMessages(1); });
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            document.getElementById('filterElder').value = '';
+            document.getElementById('filterSenderType').value = '';
+            document.getElementById('filterStartDate').value = '';
+            document.getElementById('filterEndDate').value = '';
+            currentPage = 1;
+            loadMessages(1);
+        });
+
+        autoRefreshTimer = setInterval(function() { loadStats(); }, 30000);
+    });
+
+    function loadElderOptions() {
+        LoadingUtils.safeFetch('/api/v1/elders').then(function(elderData) {
+            if (elderData.code === 200) {
+                var elders = elderData.data || [];
+                var options = '<option value="">全部老人</option>' +
+                    elders.map(function(e) { return '<option value="' + e.id + '">' + escapeHtml(e.name) + ' (' + e.room_number + ')</option>'; }).join('');
+                document.getElementById('filterElder').innerHTML = options;
+            }
+        }).catch(function() {});
+    }
+
+    function loadStats() {
+        LoadingUtils.safeFetch('/api/v1/family-messages/admin/stats').then(function(data) {
+            if (data.code === 200) {
+                document.getElementById('totalMsgCount').textContent = data.data.total;
+                document.getElementById('familyMsgCount').textContent = data.data.family_count;
+                document.getElementById('caregiverMsgCount').textContent = data.data.caregiver_count;
+                document.getElementById('voiceMsgCount').textContent = data.data.voice_count;
+            }
+        }).catch(function() {});
+    }
+
+    function loadMessages(page) {
+        currentPage = page;
+        var elderId = document.getElementById('filterElder').value;
+        var senderType = document.getElementById('filterSenderType').value;
+        var startDate = document.getElementById('filterStartDate').value;
+        var endDate = document.getElementById('filterEndDate').value;
+
+        var url = '/api/v1/family-messages/admin/list?page=' + page + '&page_size=' + pageSize;
+        if (elderId) url += '&elder_id=' + elderId;
+        if (senderType) url += '&sender_type=' + senderType;
+        if (startDate) url += '&start_date=' + startDate;
+        if (endDate) url += '&end_date=' + endDate;
+
+        LoadingUtils.safeFetch(url).then(function(data) {
+            if (data.code === 200) {
+                var list = data.data.list || [];
+                var tbody = document.getElementById('messagesTableBody');
+
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-2"></i>暂无留言记录</td></tr>';
+                } else {
+                    var roleMap = {
+                        family: '<span class="badge bg-success">家属</span>',
+                        caregiver: '<span class="badge bg-primary">护工</span>'
+                    };
+                    tbody.innerHTML = list.map(function(m) {
+                        var rowClass = m.sender_type === 'family' ? 'msg-family-row' : 'msg-caregiver-row';
+                        var typeHtml = m.message_type === 'voice'
+                            ? '<span class="voice-badge"><i class="bi bi-mic"></i> 语音</span>'
+                            : '<span class="badge bg-secondary">文字</span>';
+                        var contentHtml = m.message_type === 'voice' && m.voice_file_path
+                            ? '<button class="btn btn-sm btn-outline-primary" onclick="playVoice(\'' + m.voice_file_path + '\')"><i class="bi bi-play-circle me-1"></i>播放语音</button>'
+                            : '<span class="text-break" style="max-width:250px;display:inline-block;">' + escapeHtml(m.content || '-') + '</span>';
+                        return '<tr class="' + rowClass + '">' +
+                            '<td>' + m.id + '</td>' +
+                            '<td><strong>' + escapeHtml(m.elder_name || '-') + '</strong></td>' +
+                            '<td><span class="badge bg-secondary">' + escapeHtml(m.room_number || '-') + '</span></td>' +
+                            '<td>' + escapeHtml(m.sender_name || '-') + '</td>' +
+                            '<td>' + (roleMap[m.sender_type] || m.sender_type) + '</td>' +
+                            '<td>' + escapeHtml(m.receiver_name || '-') + '</td>' +
+                            '<td>' + typeHtml + '</td>' +
+                            '<td>' + contentHtml + '</td>' +
+                            '<td>' + (m.is_read ? '<span class="badge bg-light text-muted">已读</span>' : '<span class="badge bg-warning text-dark">未读</span>') + '</td>' +
+                            '<td class="small">' + (m.created_at || '-') + '</td>' +
+                        '</tr>';
+                    }).join('');
+                }
+                renderPagination(data.data.pagination);
+            }
+        }).catch(function(err) { showToast(err.message || '加载留言失败', 'danger'); });
+    }
+
+    function playVoice(path) {
+        var audio = new Audio('/' + path);
+        audio.play().catch(function() { showToast('语音播放失败', 'warning'); });
+    }
+
+    function renderPagination(p) {
+        document.getElementById('paginationInfo').textContent = '第 ' + p.page + ' 页，共 ' + p.total_pages + ' 页，总计 ' + p.total + ' 条';
+        var html = '';
+        if (p.page > 1) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page - 1) + '">上一页</a></li>';
+        for (var i = Math.max(1, p.page - 2); i <= Math.min(p.total_pages, p.page + 2); i++) {
+            html += '<li class="page-item ' + (i === p.page ? 'active' : '') + '"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+        }
+        if (p.page < p.total_pages) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page + 1) + '">下一页</a></li>';
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav .page-link').forEach(function(el) {
+            el.addEventListener('click', function(e) { e.preventDefault(); var page = parseInt(this.dataset.page); if (!isNaN(page)) loadMessages(page); });
+        });
+    }
+
+    function escapeHtml(str) { if (!str) return ''; return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+</script>
+{% endblock %}

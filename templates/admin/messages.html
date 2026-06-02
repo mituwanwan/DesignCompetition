@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}消息管理 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}消息管理{% endblock %}
+
+{% block sidebar %}
+    <a href="/admin"><i class="bi bi-house-door me-2"></i> 首页数据看板</a>
+    <a href="/admin/elders"><i class="bi bi-people me-2"></i> 老人信息管理</a>
+    <a href="/admin/users"><i class="bi bi-person-badge me-2"></i> 账号权限管理</a>
+    <a href="/admin/alarms"><i class="bi bi-exclamation-triangle me-2"></i> 异常报警中心</a>
+    <a href="/admin/visits"><i class="bi bi-calendar-check me-2"></i> 探视预约管理</a>
+    <a href="/admin/messages" class="active"><i class="bi bi-chat-left-text me-2"></i> 消息管理</a>
+    <a href="/admin/family-messages"><i class="bi bi-chat-heart me-2"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag me-2"></i> 异常上报管理</a>
+    <a href="/admin/reports"><i class="bi bi-bar-chart me-2"></i> 数据统计分析</a>
+    <a href="/admin/logs"><i class="bi bi-journal-text me-2"></i> 系统日志</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card { border-radius: var(--radius-md); padding: var(--space-md); text-align: center; }
+    .stat-card h3 { margin: 5px 0; }
+    .filter-section { background: var(--bg-hover); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md); }
+    .msg-family { border-left: 3px solid var(--primary); }
+    .msg-caregiver { border-left: 3px solid var(--success); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="stat-card bg-primary text-white">
+                <h6><i class="bi bi-chat-dots me-1"></i> 总消息数</h6>
+                <h3 id="totalMsgCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-info text-white">
+                <h6><i class="bi bi-person me-1"></i> 家属消息</h6>
+                <h3 id="familyMsgCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-success text-white">
+                <h6><i class="bi bi-person-badge me-1"></i> 护工消息</h6>
+                <h3 id="caregiverMsgCount">--</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card bg-warning text-white">
+                <h6><i class="bi bi-envelope me-1"></i> 未读消息</h6>
+                <h3 id="unreadMsgCount">--</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-section">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterElder">
+                    <option value="">全部老人</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterRole">
+                    <option value="">全部角色</option>
+                    <option value="family">家属</option>
+                    <option value="caregiver">护工</option>
+                </select>
+            </div>
+            <div class="col-md-5 text-end">
+                <button class="btn btn-primary btn-sm me-1" id="searchBtn"><i class="bi bi-search"></i> 查询</button>
+                <button class="btn btn-outline-secondary btn-sm me-1" id="resetBtn"><i class="bi bi-x-circle"></i> 重置</button>
+                <button class="btn btn-outline-success btn-sm" onclick="exportMessages()"><i class="bi bi-file-earmark-excel"></i> 导出Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive bg-white p-3 rounded shadow-sm">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>老人</th>
+                    <th>房间号</th>
+                    <th>发送者</th>
+                    <th>发送者角色</th>
+                    <th>消息内容</th>
+                    <th>已读</th>
+                    <th>发送时间</th>
+                </tr>
+            </thead>
+            <tbody id="messagesTableBody">
+                <tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>正在加载...</td></tr>
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted small" id="paginationInfo">第 1 页，共 1 页</div>
+            <nav><ul class="pagination pagination-sm mb-0" id="paginationNav"></ul></nav>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentPage = 1;
+    const pageSize = 20;
+    let autoRefreshTimer = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMessages(1);
+        loadMessageStats();
+        loadElderOptions();
+
+        document.getElementById('searchBtn').addEventListener('click', function() {
+            currentPage = 1;
+            loadMessages(1);
+        });
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            document.getElementById('filterElder').value = '';
+            document.getElementById('filterRole').value = '';
+            currentPage = 1;
+            loadMessages(1);
+        });
+
+        autoRefreshTimer = setInterval(function() {
+            loadMessageStats();
+        }, 30000);
+    });
+
+    function loadElderOptions() {
+        LoadingUtils.safeFetch('/api/v1/admin/messages?page=1&page_size=1').then(data => {
+            if (data.code === 200) {
+                LoadingUtils.safeFetch('/api/v1/elders').then(elderData => {
+                    if (elderData.code === 200) {
+                        const elders = elderData.data || [];
+                        const options = '<option value="">全部老人</option>' +
+                            elders.map(e => `<option value="${e.id}">${e.name} (${e.room_number})</option>`).join('');
+                        document.getElementById('filterElder').innerHTML = options;
+                    }
+                }).catch(() => {});
+            }
+        }).catch(() => {});
+    }
+
+    function loadMessageStats() {
+        LoadingUtils.safeFetch('/api/v1/admin/messages?page=1&page_size=1').then(data => {
+            if (data.code === 200) {
+                document.getElementById('totalMsgCount').textContent = data.data.pagination.total;
+            }
+        }).catch(() => {});
+        LoadingUtils.safeFetch('/api/v1/admin/messages?sender_role=family&page=1&page_size=1').then(data => {
+            if (data.code === 200) {
+                document.getElementById('familyMsgCount').textContent = data.data.pagination.total;
+            }
+        }).catch(() => {});
+        LoadingUtils.safeFetch('/api/v1/admin/messages?sender_role=caregiver&page=1&page_size=1').then(data => {
+            if (data.code === 200) {
+                document.getElementById('caregiverMsgCount').textContent = data.data.pagination.total;
+            }
+        }).catch(() => {});
+    }
+
+    function loadMessages(page) {
+        currentPage = page;
+        const elderId = document.getElementById('filterElder').value;
+        const senderRole = document.getElementById('filterRole').value;
+
+        let url = `/api/v1/admin/messages?page=${page}&page_size=${pageSize}`;
+        if (elderId) url += `&elder_id=${elderId}`;
+        if (senderRole) url += `&sender_role=${senderRole}`;
+
+        LoadingUtils.safeFetch(url).then(data => {
+            if (data.code === 200) {
+                const list = data.data.list || [];
+                const tbody = document.getElementById('messagesTableBody');
+
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-2"></i>暂无消息记录</td></tr>';
+                } else {
+                    const roleMap = {
+                        family: '<span class="badge bg-info">家属</span>',
+                        caregiver: '<span class="badge bg-success">护工</span>'
+                    };
+
+                    tbody.innerHTML = list.map(m => {
+                        const rowClass = m.sender_role === 'family' ? 'msg-family' : 'msg-caregiver';
+                        return `<tr class="${rowClass}">
+                            <td>${m.id}</td>
+                            <td><strong>${m.elder_name || '-'}</strong></td>
+                            <td><span class="badge bg-secondary">${m.room_number || '-'}</span></td>
+                            <td>${m.sender_name || '-'}</td>
+                            <td>${roleMap[m.sender_role] || m.sender_role}</td>
+                            <td class="text-break" style="max-width:300px;">${m.content || '-'}</td>
+                            <td>${m.is_read ? '<span class="badge bg-light text-muted">已读</span>' : '<span class="badge bg-warning text-dark">未读</span>'}</td>
+                            <td class="small">${m.created_at || '-'}</td>
+                        </tr>`;
+                    }).join('');
+                }
+                renderPagination(data.data.pagination);
+            }
+        }).catch(err => {
+            showToast(err.message || '加载消息失败', 'danger');
+        });
+    }
+
+    function renderPagination(p) {
+        document.getElementById('paginationInfo').textContent = `第 ${p.page} 页，共 ${p.total_pages} 页，总计 ${p.total} 条`;
+        let html = '';
+        if (p.page > 1) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page-1}">上一页</a></li>`;
+        for (let i = Math.max(1, p.page-2); i <= Math.min(p.total_pages, p.page+2); i++) {
+            html += `<li class="page-item ${i===p.page?'active':''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+        }
+        if (p.page < p.total_pages) html += `<li class="page-item"><a class="page-link" href="#" data-page="${p.page+1}">下一页</a></li>`;
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav .page-link').forEach(el => {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                const page = parseInt(this.dataset.page);
+                if (!isNaN(page)) loadMessages(page);
+            });
+        });
+    }
+
+    function exportMessages() {
+        const elderId = document.getElementById('filterElder').value;
+        const senderRole = document.getElementById('filterRole').value;
+        let url = '/api/v1/admin/messages/export?';
+        if (elderId) url += `elder_id=${elderId}&`;
+        if (senderRole) url += `sender_role=${senderRole}&`;
+        window.location.href = url;
+        showToast('正在导出消息记录...', 'info');
+    }
+</script>
+{% endblock %}

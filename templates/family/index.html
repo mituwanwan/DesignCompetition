@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+
+{% block title %}子女端首页 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}老人信息中心{% endblock %}
+
+{% block sidebar %}
+    <a href="/family" class="active"><i class="bi bi-house-door"></i> 老人信息</a>
+    <a href="/family/health"><i class="bi bi-heart-pulse"></i> 健康数据</a>
+    <a href="/family/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/family/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/family/alarms"><i class="bi bi-exclamation-triangle"></i> 系统报警 <span class="badge bg-danger sidebar-alarm-badge" id="alarmNavBadge" style="display:none">0</span></a>
+    <a href="/family/video-visit"><i class="bi bi-camera-video"></i> 视频探视</a>
+    <a href="/family/appointment"><i class="bi bi-calendar-event"></i> 预约探望</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="mb-3"><i class="bi bi-people"></i> 已绑定老人</h6>
+                    <div class="btn-group w-100" role="group" id="elderTabs">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="contentArea">
+    </div>
+</div>
+
+<div class="modal fade" id="alarmDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>报警详情</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="alarmDetailBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let boundElders = [];
+    let currentElderId = null;
+    let lastAlarmCount = 0;
+    let refreshTimer = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        requestNotificationPermission();
+        loadBoundElders();
+        refreshTimer = setInterval(loadData, 15000);
+    });
+
+    function requestNotificationPermission() {
+        if ('Notification' in window) {
+            Notification.requestPermission().then(function(permission) {
+                if (permission === 'granted') {
+                    console.log('浏览器通知权限已启用');
+                }
+            });
+        }
+    }
+
+    function sendBrowserNotification(title, body) {
+        if ('Notification' in window && Notification.permission === 'granted') {
+            var notification = new Notification(title, {
+                body: body,
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚠️</text></svg>',
+                tag: 'alarm-notification',
+                requireInteraction: true
+            });
+            notification.onclick = function() {
+                window.focus();
+                notification.close();
+                window.location.href = '/family/alarms';
+            };
+            setTimeout(function() { notification.close(); }, 10000);
+        }
+    }
+
+    function playAlarmSound() {
+        try {
+            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var oscillator = audioCtx.createOscillator();
+            var gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+            oscillator.frequency.setValueAtTime(660, audioCtx.currentTime + 0.15);
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.3);
+            oscillator.frequency.setValueAtTime(660, audioCtx.currentTime + 0.45);
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.7);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.7);
+        } catch (e) {}
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function loadBoundElders() {
+        LoadingUtils.safeFetch('/api/v1/family/elders')
+            .then(function(data) {
+                if (data.code === 200) {
+                    boundElders = data.data || [];
+                    renderElderTabs();
+                    if (boundElders.length > 0 && !currentElderId) {
+                        selectElder(boundElders[0].id);
+                    }
+                }
+            })
+            .catch(function(error) {
+                var container = document.getElementById('elderTabs');
+                LoadingUtils.showError(container, error.message || '加载绑定老人失败，请刷新重试', loadBoundElders);
+            });
+    }
+
+    function renderElderTabs() {
+        var container = document.getElementById('elderTabs');
+
+        if (boundElders.length === 0) {
+            LoadingUtils.showEmpty(container, '暂未绑定任何老人，请联系管理员');
+            return;
+        }
+
+        var html = '';
+        boundElders.forEach(function(elder) {
+            var isActive = currentElderId === elder.id;
+            html += '<button type="button" class="btn ' + (isActive ? 'btn-primary' : 'btn-outline-primary') + '" data-elder-id="' + elder.id + '" onclick="selectElder(' + elder.id + ')">' +
+                '<i class="bi bi-person-circle me-1"></i>' + escapeHtml(elder.name) +
+            '</button>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function selectElder(elderId) {
+        currentElderId = elderId;
+        lastAlarmCount = 0;
+        renderElderTabs();
+        loadData();
+    }
+
+    function loadData() {
+        if (!currentElderId) return;
+
+        loadElderDetail();
+        loadRecentMessages();
+        loadRecentCareRecords();
+        loadRecentAlarms();
+    }
+
+    function loadElderDetail() {
+        LoadingUtils.safeFetch('/api/v1/elders/' + currentElderId)
+            .then(function(data) {
+                if (data.code === 200) {
+                    renderElderDetail(data.data);
+                }
+            })
+            .catch(function(error) {
+                var container = document.getElementById('contentArea');
+                if (container) {
+                    LoadingUtils.showError(container, error.message || '加载老人详情失败，请刷新重试', loadElderDetail);
+                }
+            });
+    }
+
+    function renderElderDetail(elder) {
+        var container = document.getElementById('contentArea');
+        var age = elder.age || '未知';
+        var genderIcon = elder.gender === 'male' ? 'bi-gender-male' : 'bi-gender-female';
+        var genderColor = elder.gender === 'male' ? 'color: var(--primary)' : 'color: var(--danger)';
+        var genderText = elder.gender === 'male' ? '男' : '女';
+        var emergencyContact = elder.emergency_contact_name || elder.emergency_contact || '未设置';
+        var emergencyPhone = elder.emergency_contact_phone || '';
+        var careLevel = elder.care_level || '标准护理';
+        var careLevelMap = { 'standard': '标准护理', 'enhanced': '加强护理', 'special': '特殊护理' };
+        if (careLevelMap[careLevel]) careLevel = careLevelMap[careLevel];
+
+        container.innerHTML = '' +
+            '<div class="row">' +
+                '<div class="col-lg-4 mb-4">' +
+                    '<div class="card">' +
+                        '<div class="card-body text-center">' +
+                            '<div class="p-3 rounded-circle mx-auto mb-3" style="width: 80px; height: 80px; background: var(--primary-soft)">' +
+                                '<i class="bi bi-person-fill fs-1" style="color: var(--primary)"></i>' +
+                            '</div>' +
+                            '<h4 class="mb-2">' + escapeHtml(elder.name) + '</h4>' +
+                            '<p class="mb-1">' +
+                                '<span><i class="bi ' + genderIcon + ' me-1" style="' + genderColor + '"></i>' + genderText + '</span>' +
+                                '<span class="ms-3">' + age + '岁</span>' +
+                            '</p>' +
+                            '<p class="mb-1"><i class="bi bi-door-closed me-1 text-muted"></i>' + escapeHtml(elder.room_number || '-') + '房 ' + escapeHtml(elder.bed_number || '-') + '床</p>' +
+                            '<p class="mb-1"><i class="bi bi-shield-check me-1 text-muted"></i>' + escapeHtml(careLevel) + '</p>' +
+                            '<p class="mb-1"><i class="bi bi-telephone me-1 text-muted"></i>' + escapeHtml(emergencyContact) + (emergencyPhone ? ' ' + escapeHtml(emergencyPhone) : '') + '</p>' +
+                            '<div class="d-flex gap-2 mt-3">' +
+                                '<button class="btn btn-primary flex-grow-1" onclick="goToMessages()">' +
+                                    '<i class="bi bi-chat me-1"></i>发送留言' +
+                                '</button>' +
+                                '<button class="btn btn-outline-danger flex-grow-1" onclick="window.location.href=\'/family/alarms\'">' +
+                                    '<i class="bi bi-exclamation-triangle me-1"></i>查看报警' +
+                                '</button>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+
+                '<div class="col-lg-8 mb-4">' +
+                    '<div class="row">' +
+                        '<div class="col-md-6 mb-4">' +
+                            '<div class="card h-100">' +
+                                '<div class="card-header d-flex justify-content-between align-items-center">' +
+                                    '<h5 class="mb-0"><i class="bi bi-chat-left-text me-2" style="color: var(--primary)"></i>最新留言</h5>' +
+                                    '<a href="/family/messages?elder_id=' + currentElderId + '" class="btn btn-sm btn-outline-primary">查看全部</a>' +
+                                '</div>' +
+                                '<div class="card-body" id="recentMessagesList">' +
+                                    '<div class="text-center py-4 text-muted"><i class="bi bi-hourglass-split d-block mb-2"></i>正在加载...</div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+
+                        '<div class="col-md-6 mb-4">' +
+                            '<div class="card h-100">' +
+                                '<div class="card-header d-flex justify-content-between align-items-center">' +
+                                    '<h5 class="mb-0"><i class="bi bi-heart-pulse me-2" style="color: var(--success)"></i>最新护理记录</h5>' +
+                                    '<a href="/family/health?elder_id=' + currentElderId + '" class="btn btn-sm btn-outline-success">查看全部</a>' +
+                                '</div>' +
+                                '<div class="card-body" id="recentCareRecordsList">' +
+                                    '<div class="text-center py-4 text-muted"><i class="bi bi-hourglass-split d-block mb-2"></i>正在加载...</div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+
+                    '<div class="card">' +
+                        '<div class="card-header d-flex justify-content-between align-items-center">' +
+                            '<h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2" style="color: var(--danger)"></i>系统报警</h5>' +
+                            '<span class="badge bg-danger" id="alarmsCountBadge">0</span>' +
+                        '</div>' +
+                        '<div class="card-body" id="recentAlarmsList">' +
+                            '<div class="text-center py-4 text-muted"><i class="bi bi-hourglass-split d-block mb-2"></i>正在加载...</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+    }
+
+    function loadRecentMessages() {
+        var container = document.getElementById('recentMessagesList');
+        if (!container) return;
+
+        LoadingUtils.safeFetch('/api/v1/family/elders/' + currentElderId + '/messages?page=1&page_size=5')
+            .then(function(data) {
+                if (data.code === 200) {
+                    updateRecentMessagesList(data.data.list || []);
+                } else {
+                    LoadingUtils.showError(container, data.msg || '加载留言失败', loadRecentMessages);
+                }
+            })
+            .catch(function(error) {
+                if (container) {
+                    LoadingUtils.showError(container, error.message || '加载留言失败，请刷新重试', loadRecentMessages);
+                }
+            });
+    }
+
+    function updateRecentMessagesList(messages) {
+        var container = document.getElementById('recentMessagesList');
+        if (!container) return;
+
+        if (!messages || messages.length === 0) {
+            LoadingUtils.showEmpty(container, '暂无留言记录');
+            return;
+        }
+
+        var html = '';
+        messages.forEach(function(message) {
+            var time = new Date(message.created_at).toLocaleString('zh-CN', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            var senderRole = message.sender_role === 'caregiver' ? '护工' : '家属';
+            var roleColor = message.sender_role === 'caregiver' ? 'var(--primary)' : 'var(--success)';
+            var roleBg = message.sender_role === 'caregiver' ? 'var(--primary-soft)' : 'var(--success-soft)';
+            var senderName = message.sender_name || senderRole;
+
+            html += '<div class="card mb-2 border-0 shadow-sm">' +
+                '<div class="card-body p-3">' +
+                    '<div class="d-flex justify-content-between align-items-start">' +
+                        '<div><span class="badge" style="background: ' + roleBg + '; color: ' + roleColor + '">' + escapeHtml(senderName) + ' (' + senderRole + ')</span></div>' +
+                        '<small class="text-muted">' + time + '</small>' +
+                    '</div>' +
+                    '<p class="mb-0 mt-2">' + escapeHtml(message.content) + '</p>' +
+                    (message.is_read === 0 ? '<span class="badge bg-danger mt-2">未读</span>' : '') +
+                '</div>' +
+            '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function loadRecentCareRecords() {
+        var container = document.getElementById('recentCareRecordsList');
+        if (!container) return;
+
+        LoadingUtils.safeFetch('/api/v1/family/elders/' + currentElderId + '/health?page=1&page_size=5')
+            .then(function(data) {
+                if (data.code === 200) {
+                    updateRecentCareRecordsList(data.data.list || []);
+                } else {
+                    LoadingUtils.showError(container, data.msg || '加载护理记录失败', loadRecentCareRecords);
+                }
+            })
+            .catch(function(error) {
+                if (container) {
+                    LoadingUtils.showError(container, error.message || '加载护理记录失败，请刷新重试', loadRecentCareRecords);
+                }
+            });
+    }
+
+    function updateRecentCareRecordsList(records) {
+        var container = document.getElementById('recentCareRecordsList');
+        if (!container) return;
+
+        if (!records || records.length === 0) {
+            LoadingUtils.showEmpty(container, '暂无护理记录');
+            return;
+        }
+
+        var html = '';
+        records.forEach(function(record) {
+            var date = record.record_date || new Date(record.created_at).toLocaleDateString('zh-CN');
+            var caregiverName = record.caregiver_name || '未知';
+
+            var healthInfo = '';
+            var health = record.health_data;
+            if (health && typeof health === 'object') {
+                var items = [];
+                if (health.temperature) items.push('体温: ' + health.temperature + '°C');
+                if (health.heart_rate) items.push('心率: ' + health.heart_rate + 'bpm');
+                if (health.systolic_pressure && health.diastolic_pressure) items.push('血压: ' + health.systolic_pressure + '/' + health.diastolic_pressure);
+                if (health.blood_sugar) items.push('血糖: ' + health.blood_sugar + 'mmol/L');
+                healthInfo = items.join(' | ') || '暂无详细数据';
+            } else if (health && typeof health === 'string') {
+                try {
+                    var parsed = JSON.parse(health);
+                    var items = [];
+                    if (parsed.temperature) items.push('体温: ' + parsed.temperature + '°C');
+                    if (parsed.heart_rate) items.push('心率: ' + parsed.heart_rate + 'bpm');
+                    if (parsed.systolic_pressure && parsed.diastolic_pressure) items.push('血压: ' + parsed.systolic_pressure + '/' + parsed.diastolic_pressure);
+                    if (parsed.blood_sugar) items.push('血糖: ' + parsed.blood_sugar + 'mmol/L');
+                    healthInfo = items.join(' | ') || '暂无详细数据';
+                } catch (e) {
+                    healthInfo = '暂无详细数据';
+                }
+            } else {
+                healthInfo = '暂无详细数据';
+            }
+
+            html += '<div class="card mb-2 border-0 shadow-sm">' +
+                '<div class="card-body p-3">' +
+                    '<div class="d-flex justify-content-between align-items-center mb-1">' +
+                        '<span class="text-muted small">' + date + '</span>' +
+                        '<span class="text-muted small"><i class="bi bi-person me-1"></i>' + escapeHtml(caregiverName) + '</span>' +
+                    '</div>' +
+                    '<div class="small">' + healthInfo + '</div>' +
+                '</div>' +
+            '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function loadRecentAlarms() {
+        var container = document.getElementById('recentAlarmsList');
+        if (!container) return;
+
+        LoadingUtils.safeFetch('/api/v1/family/elders/' + currentElderId + '/alarms')
+            .then(function(data) {
+                if (data.code === 200) {
+                    updateRecentAlarmsList(data.data || []);
+                } else {
+                    LoadingUtils.showError(container, data.msg || '加载报警信息失败', loadRecentAlarms);
+                }
+            })
+            .catch(function(error) {
+                if (container) {
+                    LoadingUtils.showError(container, error.message || '加载报警信息失败，请刷新重试', loadRecentAlarms);
+                }
+            });
+    }
+
+    function updateRecentAlarmsList(alarms) {
+        var container = document.getElementById('recentAlarmsList');
+        var badge = document.getElementById('alarmsCountBadge');
+        if (!container || !badge) return;
+
+        if (!alarms || alarms.length === 0) {
+            LoadingUtils.showEmpty(container, '暂无系统报警，一切安好！');
+            badge.textContent = '0';
+            badge.style.display = 'none';
+            lastAlarmCount = 0;
+            return;
+        }
+
+        var unhandledCount = alarms.filter(function(a) { return a.status === 'unhandled'; }).length;
+        badge.textContent = unhandledCount;
+        badge.style.display = unhandledCount > 0 ? 'inline-block' : 'none';
+
+        if (alarms.length > lastAlarmCount && lastAlarmCount > 0) {
+            var newestAlarm = alarms[0];
+            var alarmType = getAlarmTypeName(newestAlarm.type);
+            sendBrowserNotification(
+                '【报警】' + (newestAlarm.elder_name || '老人'),
+                alarmType + '\n请及时查看详情'
+            );
+            playAlarmSound();
+            showToast('收到新报警！' + (newestAlarm.elder_name || ''), 'danger');
+        }
+        lastAlarmCount = alarms.length;
+
+        var statusMap = {
+            'unhandled': '<span class="badge bg-danger">未处理</span>',
+            'processing': '<span class="badge bg-warning text-dark">处理中</span>',
+            'resolved': '<span class="badge bg-success">已解决</span>'
+        };
+
+        var html = '';
+        alarms.forEach(function(alarm, index) {
+            var time = new Date(alarm.triggered_at).toLocaleString('zh-CN', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            var alarmType = getAlarmTypeName(alarm.type);
+            var statusHtml = statusMap[alarm.status] || '';
+            var triggerSource = alarm.trigger_source || alarm.description || '无详情';
+
+            html += '<div class="alert alert-warning alert-dismissible fade show mb-2" role="alert" style="cursor:pointer;" onclick="showAlarmDetail(' + index + ')" data-alarm-index="' + index + '">' +
+                '<div class="d-flex justify-content-between align-items-start">' +
+                    '<div class="flex-grow-1">' +
+                        '<strong><i class="bi bi-exclamation-triangle me-1"></i> ' + alarmType + '</strong>' +
+                        '<div class="small mt-1 text-truncate" style="max-width: 400px;">' + escapeHtml(triggerSource) + '</div>' +
+                    '</div>' +
+                    '<div class="text-end ms-2 flex-shrink-0">' +
+                        statusHtml + '<br>' +
+                        '<small class="text-muted">' + time + '</small>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        });
+
+        container.innerHTML = html;
+
+        window._currentAlarms = alarms;
+    }
+
+    function getAlarmTypeName(type) {
+        var typeMap = {
+            'auto_health': '健康异常报警',
+            'manual_incident': '手动上报报警',
+            'health': '健康异常报警',
+            'incident': '异常事件报警',
+            'other': '其他报警'
+        };
+        return typeMap[type] || '系统报警';
+    }
+
+    function showAlarmDetail(index) {
+        var alarms = window._currentAlarms;
+        if (!alarms || !alarms[index]) return;
+
+        var alarm = alarms[index];
+        var alarmType = getAlarmTypeName(alarm.type);
+        var statusMap = {
+            'unhandled': '<span class="badge bg-danger">未处理</span>',
+            'processing': '<span class="badge bg-warning text-dark">处理中</span>',
+            'resolved': '<span class="badge bg-success">已解决</span>'
+        };
+        var statusText = { 'unhandled': '未处理', 'processing': '处理中', 'resolved': '已解决' };
+
+        var triggerTime = new Date(alarm.triggered_at).toLocaleString('zh-CN');
+        var resolvedTime = alarm.resolved_at ? new Date(alarm.resolved_at).toLocaleString('zh-CN') : '暂无';
+        var triggerSource = alarm.trigger_source || alarm.description || '无';
+        var elderName = alarm.elder_name || '未知';
+        var roomNumber = alarm.room_number || '-';
+
+        var body = document.getElementById('alarmDetailBody');
+        body.innerHTML = '' +
+            '<div class="mb-3">' +
+                '<div class="d-flex justify-content-between align-items-center mb-3">' +
+                    '<h5 class="mb-0">' + alarmType + '</h5>' +
+                    (statusMap[alarm.status] || '') +
+                '</div>' +
+                '<div class="table-responsive"><table class="table table-sm">' +
+                    '<tbody>' +
+                        '<tr><th>老人姓名</th><td>' + escapeHtml(elderName) + '</td></tr>' +
+                        '<tr><th>房间号</th><td>' + escapeHtml(roomNumber) + '</td></tr>' +
+                        '<tr><th>报警类型</th><td>' + alarmType + '</td></tr>' +
+                        '<tr><th>报警时间</th><td>' + triggerTime + '</td></tr>' +
+                        '<tr><th>处理状态</th><td>' + (statusText[alarm.status] || '未知') + '</td></tr>' +
+                        (alarm.status === 'resolved' ? '<tr><th>处理时间</th><td>' + resolvedTime + '</td></tr>' : '') +
+                        '<tr><th>报警来源</th><td>' + escapeHtml(triggerSource) + '</td></tr>' +
+                    '</tbody>' +
+                '</table></div>' +
+            '</div>';
+
+        var modal = new bootstrap.Modal(document.getElementById('alarmDetailModal'));
+        modal.show();
+    }
+
+    function goToMessages() {
+        if (!currentElderId) {
+            showToast('请先选择一位老人', 'warning');
+            return;
+        }
+        window.location.href = '/family/messages?elder_id=' + currentElderId;
+    }
+</script>
+{% endblock %}

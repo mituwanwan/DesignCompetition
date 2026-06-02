@@ -1,0 +1,612 @@
+{% extends "base.html" %}
+
+{% block title %}数据统计分析 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}数据统计分析{% endblock %}
+
+{% block sidebar %}
+    <a href="/admin"><i class="bi bi-house-door me-2"></i> 首页数据看板</a>
+    <a href="/admin/elders"><i class="bi bi-people me-2"></i> 老人信息管理</a>
+    <a href="/admin/users"><i class="bi bi-person-badge me-2"></i> 账号权限管理</a>
+    <a href="/admin/alarms"><i class="bi bi-exclamation-triangle me-2"></i> 异常报警中心</a>
+    <a href="/admin/alarm-rules"><i class="bi bi-gear me-2"></i> 报警规则配置</a>
+    <a href="/admin/visits"><i class="bi bi-calendar-check me-2"></i> 探视预约管理</a>
+    <a href="/admin/messages"><i class="bi bi-chat-left-text me-2"></i> 消息管理</a>
+    <a href="/admin/family-messages"><i class="bi bi-chat-heart me-2"></i> 亲情留言监管</a>
+    <a href="/admin/incident-reports"><i class="bi bi-flag me-2"></i> 异常上报管理</a>
+    <a href="/admin/reports" class="active"><i class="bi bi-bar-chart me-2"></i> 数据统计分析</a>
+    <a href="/admin/logs"><i class="bi bi-journal-text me-2"></i> 系统日志</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-2">
+                    <label class="form-label mb-0">月份筛选</label>
+                    <select class="form-select form-select-sm" id="filterMonth">
+                        <option value="">全部月份</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-0">楼层筛选</label>
+                    <select class="form-select form-select-sm" id="filterFloor">
+                        <option value="">全部楼层</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-0">护工筛选</label>
+                    <select class="form-select form-select-sm" id="filterCaregiver">
+                        <option value="">全部护工</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label mb-0">时间范围</label>
+                    <div class="input-group input-group-sm">
+                        <input type="date" class="form-control" id="filterStartDate">
+                        <span class="input-group-text">至</span>
+                        <input type="date" class="form-control" id="filterEndDate">
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex gap-2 align-items-end">
+                    <button class="btn btn-primary btn-sm" id="searchBtn"><i class="bi bi-search"></i> 查询</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="resetBtn"><i class="bi bi-arrow-counterclockwise"></i> 重置</button>
+                    <button class="btn btn-outline-success btn-sm ms-auto" id="exportExcelBtn"><i class="bi bi-file-earmark-spreadsheet"></i> 导出Excel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card text-bg-info text-white h-100">
+                <div class="card-body">
+                    <h6><i class="bi bi-list-check me-1"></i> 任务完成率</h6>
+                    <h2 class="display-6" id="taskRate">--</h2>
+                    <small id="taskStatsDetail">-/-</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-bg-warning text-white h-100">
+                <div class="card-body">
+                    <h6><i class="bi bi-stopwatch me-1"></i> 报警响应及时率</h6>
+                    <h2 class="display-6" id="alarmResponseRate">--</h2>
+                    <small>1小时内响应</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-bg-primary text-white h-100">
+                <div class="card-body">
+                    <h6><i class="bi bi-thermometer-half me-1"></i> 平均体温</h6>
+                    <h2 class="display-6" id="avgTemp">--</h2>
+                    <small id="avgTempRange">筛选范围内</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-bg-danger text-white h-100">
+                <div class="card-body">
+                    <h6><i class="bi bi-heart-pulse me-1"></i> 平均心率</h6>
+                    <h2 class="display-6" id="avgHR">--</h2>
+                    <small id="avgHRRange">筛选范围内 bpm</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-person-check me-2"></i> 老人入住状态分布</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('elderStatusChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="elderStatusChart" style="height:280px;"></div></div>
+            </div>
+        </div>
+        <div class="col-md-8 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i> 报警趋势</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('alarmTrendChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="alarmTrendChart" style="height:280px;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i> 报警类型分布</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('alarmTypeChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="alarmTypeChart" style="height:280px;"></div></div>
+            </div>
+        </div>
+        <div class="col-md-8 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-person-workspace me-2"></i> 护工工作量统计</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('caregiverWorkloadChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="caregiverWorkloadChart" style="height:280px;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-heart-pulse me-2"></i> 全院基础病占比</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('diseaseChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="diseaseChart" style="height:280px;"></div></div>
+            </div>
+        </div>
+        <div class="col-md-8 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-building me-2"></i> 各楼层健康分布</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('floorHealthChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="floorHealthChart" style="height:280px;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-list-check me-2"></i> 报警状态分布</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('alarmStatusChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="alarmStatusChart" style="height:280px;"></div></div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-calendar-check me-2"></i> 近7天任务趋势</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('taskTrendChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="taskTrendChart" style="height:280px;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-stopwatch me-2"></i> 护工响应时长对比</h6>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="downloadChart('responseTimeChart')"><i class="bi bi-download"></i></button>
+                </div>
+                <div class="card-body"><div id="responseTimeChart" style="height:300px;"></div></div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header"><h6 class="mb-0"><i class="bi bi-table me-2"></i> 响应时长明细</h6></div>
+                <div class="card-body">
+                    <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light sticky-top">
+                                <tr><th>护工</th><th>处理报警数</th><th>平均响应</th><th>最快响应</th><th>最慢响应</th></tr>
+                            </thead>
+                            <tbody id="responseTimeTableBody">
+                                <tr><td colspan="5" class="text-center text-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let reportsData = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const monthSelect = document.getElementById('filterMonth');
+        const now = new Date();
+        for (let i = 12; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+            const label = d.getFullYear() + '年' + (d.getMonth() + 1) + '月';
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            monthSelect.appendChild(option);
+        }
+
+        document.getElementById('searchBtn').addEventListener('click', loadReports);
+        document.getElementById('resetBtn').addEventListener('click', resetFilters);
+        document.getElementById('exportExcelBtn').addEventListener('click', exportExcel);
+
+        loadReports();
+    });
+
+    function resetFilters() {
+        document.getElementById('filterMonth').value = '';
+        document.getElementById('filterFloor').value = '';
+        document.getElementById('filterCaregiver').value = '';
+        document.getElementById('filterStartDate').value = '';
+        document.getElementById('filterEndDate').value = '';
+        loadReports();
+    }
+
+    function loadReports() {
+        const params = new URLSearchParams();
+        const month = document.getElementById('filterMonth').value;
+        const floor = document.getElementById('filterFloor').value;
+        const caregiverId = document.getElementById('filterCaregiver').value;
+        const startDate = document.getElementById('filterStartDate').value;
+        const endDate = document.getElementById('filterEndDate').value;
+
+        if (month) params.set('month', month);
+        if (floor) params.set('floor', floor);
+        if (caregiverId) params.set('caregiver_id', caregiverId);
+        if (startDate) params.set('start_date', startDate);
+        if (endDate) params.set('end_date', endDate);
+
+        LoadingUtils.safeFetch('/api/v1/stats/admin-reports?' + params.toString())
+            .then(data => {
+                if (data.code === 200) {
+                    reportsData = data.data;
+                    updateFilterSelects(data.data.filters);
+                    updateStatsCards(data.data);
+                    buildAlarmTrendChart(data.data.alarm_trend);
+                    buildAlarmTypeChart(data.data.alarm_types);
+                    buildAlarmStatusChart(data.data.alarm_status);
+                    buildTaskTrendChart(data.data.task_trend);
+                    buildElderStatusChart(data.data.elder_status);
+                    buildCaregiverWorkloadChart(data.data.caregiver_workload);
+                    buildDiseaseChart(data.data.disease_stats);
+                    buildFloorHealthChart(data.data.floor_health);
+                    buildResponseTimeChart(data.data.response_time_stats);
+                    buildResponseTimeTable(data.data.response_time_stats);
+                }
+            })
+            .catch(err => {
+                showToast(err.message || '加载统计报表失败，请重试', 'danger');
+            });
+    }
+
+    function updateFilterSelects(filters) {
+        if (!filters) return;
+
+        const floorSelect = document.getElementById('filterFloor');
+        const currentFloor = floorSelect.value;
+        floorSelect.innerHTML = '<option value="">全部楼层</option>';
+        if (filters.floors) {
+            filters.floors.forEach(f => {
+                const option = document.createElement('option');
+                option.value = f.floor;
+                option.textContent = f.floor + '楼';
+                floorSelect.appendChild(option);
+            });
+        }
+        floorSelect.value = currentFloor;
+
+        const caregiverSelect = document.getElementById('filterCaregiver');
+        const currentCaregiver = caregiverSelect.value;
+        caregiverSelect.innerHTML = '<option value="">全部护工</option>';
+        if (filters.caregivers) {
+            filters.caregivers.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c.id;
+                option.textContent = c.name;
+                caregiverSelect.appendChild(option);
+            });
+        }
+        caregiverSelect.value = currentCaregiver;
+    }
+
+    function updateStatsCards(r) {
+        var taskRateVal = r.task_stats ? r.task_stats.rate : 0;
+        var alarmRateVal = (r.alarm_response_rate !== undefined && r.alarm_response_rate !== null) ? r.alarm_response_rate : 0;
+        var avgTempVal = r.health_stats && r.health_stats.avg_temperature ? r.health_stats.avg_temperature : null;
+        var avgHRVal = r.health_stats && r.health_stats.avg_heart_rate ? r.health_stats.avg_heart_rate : null;
+
+        if (window.NumberAnimation) {
+            NumberAnimation.animateValue('taskRate', 0, taskRateVal, { duration: 800, suffix: '%' });
+            NumberAnimation.animateValue('alarmResponseRate', 0, alarmRateVal, { duration: 800, suffix: '%' });
+            if (avgTempVal !== null) NumberAnimation.animateValue('avgTemp', 0, avgTempVal, { duration: 800, decimals: 1, suffix: '°C' });
+            if (avgHRVal !== null) NumberAnimation.animateValue('avgHR', 0, avgHRVal, { duration: 800, decimals: 0, suffix: '' });
+        } else {
+            document.getElementById('taskRate').textContent = taskRateVal + '%';
+            document.getElementById('alarmResponseRate').textContent = alarmRateVal + '%';
+            document.getElementById('avgTemp').textContent = avgTempVal !== null ? avgTempVal + '°C' : '--';
+            document.getElementById('avgHR').textContent = avgHRVal !== null ? avgHRVal : '--';
+        }
+
+        document.getElementById('taskStatsDetail').textContent = r.task_stats ? (r.task_stats.completed + '/' + r.task_stats.total + ' 已完成') : '0/0 已完成';
+
+        if (window.AnomalyAlert) {
+            if (avgTempVal !== null && (avgTempVal < 36 || avgTempVal > 37.3)) {
+                AnomalyAlert.highlightElement('#avgTemp', { level: avgTempVal > 38 ? 'danger' : 'warning', pulse: true, icon: false });
+            }
+            if (avgHRVal !== null && (avgHRVal < 60 || avgHRVal > 100)) {
+                AnomalyAlert.highlightElement('#avgHR', { level: avgHRVal > 120 ? 'danger' : 'warning', pulse: true, icon: false });
+            }
+            if (alarmRateVal < 80) {
+                AnomalyAlert.highlightElement('#alarmResponseRate', { level: 'warning', pulse: true, icon: false });
+            }
+        }
+    }
+
+    const plotlyConfig = ChartUtils ? ChartUtils.getConfig() : {displayModeBar: true, responsive: true, modeBarButtonsToRemove: ['lasso2d', 'select2d'], toImageButtonOptions: {format: 'png', filename: 'chart', height: 500, width: 800, scale: 2}};
+    const layout = ChartUtils ? ChartUtils.getBaseLayout({height: 280}) : {margin: {t: 30, r: 20, b: 50, l: 50}, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {size: 12, color: '#4A4540'}};
+
+    function showNoData(elementId) {
+        const div = document.getElementById(elementId);
+        div.innerHTML = '<div class="text-center text-muted" style="padding-top:80px;"><i class="bi bi-inbox fs-1 d-block mb-2"></i>暂无数据</div>';
+    }
+
+    function buildAlarmTrendChart(trend) {
+        const dates = (trend || []).map(t => t.day);
+        const counts = (trend || []).map(t => t.count);
+        if (!dates.length) { showNoData('alarmTrendChart'); return; }
+        var chartLayout = ChartUtils ? ChartUtils.getBaseLayout({title: '报警趋势', yTitle: '报警数', height: 280, xaxisType: 'date'}) : {...layout, yaxis: {title: '报警数', dtick: 1}, xaxis: {title: '日期'}};
+        if (chartLayout.yaxis) chartLayout.yaxis.dtick = 1;
+        var trace = ChartUtils ? ChartUtils.makeLineTrace({x: dates, y: counts, name: '报警数', color: '#C96161', fill: 'tozeroy', fillColor: 'rgba(201,97,97,0.1)', hoverTemplate: '%{x}<br>报警数: %{y}次<extra></extra>'}) : {x: dates, y: counts, type: 'scatter', mode: 'lines+markers', line: {color: '#C96161', width: 2}, fill: 'tozeroy', fillcolor: 'rgba(201,97,97,0.1)', marker: {size: 6}};
+        Plotly.newPlot('alarmTrendChart', [trace], chartLayout, plotlyConfig);
+    }
+
+    function buildAlarmTypeChart(types) {
+        const typeMap = {auto_health: '健康异常', manual_incident: '手动上报', other: '其他'};
+        const labels = (types || []).map(t => typeMap[t.type] || t.type);
+        const values = (types || []).map(t => t.count);
+        if (!labels.length) { showNoData('alarmTypeChart'); return; }
+        var chartLayout = ChartUtils ? ChartUtils.getBaseLayout({title: '报警类型分布', height: 280}) : {...layout, showlegend: true, legend: {orientation: 'h', y: -0.1}};
+        var trace = ChartUtils ? ChartUtils.makePieTrace({labels: labels, values: values, colors: ['#C96161', '#E5A954', '#9B938A']}) : {labels: labels, values: values, type: 'pie', hole: 0.4, marker: {colors: ['#C96161', '#E5A954', '#9B938A']}, textinfo: 'label+percent', textposition: 'outside', hoverinfo: 'label+value+percent'};
+        Plotly.newPlot('alarmTypeChart', [trace], chartLayout, plotlyConfig);
+    }
+
+    function buildAlarmStatusChart(statuses) {
+        const statusMap = {unhandled: '未处理', processing: '处理中', resolved: '已解决'};
+        const labels = (statuses || []).map(s => statusMap[s.status] || s.status);
+        const values = (statuses || []).map(s => s.count);
+        const colors = {unhandled: '#C96161', processing: '#E5A954', resolved: '#68A357'};
+        const barColors = (statuses || []).map(s => colors[s.status] || '#9B938A');
+        if (!labels.length) { showNoData('alarmStatusChart'); return; }
+        var chartLayout = ChartUtils ? ChartUtils.getBaseLayout({title: '报警处理状态', yTitle: '数量', height: 280}) : {...layout, yaxis: {title: '数量', dtick: 1}, xaxis: {}};
+        if (chartLayout.yaxis) chartLayout.yaxis.dtick = 1;
+        var trace = ChartUtils ? ChartUtils.makeBarTrace({x: labels, y: values, name: '报警数', color: barColors, showText: true}) : {x: labels, y: values, type: 'bar', marker: {color: barColors}, text: values, textposition: 'auto'};
+        Plotly.newPlot('alarmStatusChart', [trace], chartLayout, plotlyConfig);
+    }
+
+    function buildTaskTrendChart(trend) {
+        const dates = (trend || []).map(t => t.day);
+        const total = (trend || []).map(t => t.total);
+        const completed = (trend || []).map(t => t.completed);
+        if (!dates.length) { showNoData('taskTrendChart'); return; }
+        var chartLayout = ChartUtils ? ChartUtils.getBaseLayout({title: '任务完成趋势', yTitle: '数量', height: 280, xaxisType: 'date', barmode: 'group'}) : {...layout, barmode: 'group', yaxis: {title: '数量', dtick: 1}, xaxis: {}};
+        if (chartLayout.yaxis) chartLayout.yaxis.dtick = 1;
+        var traces = ChartUtils ? [
+            ChartUtils.makeBarTrace({x: dates, y: total, name: '总任务', color: '#5B8DB8', showText: true}),
+            ChartUtils.makeBarTrace({x: dates, y: completed, name: '已完成', color: '#68A357', showText: true})
+        ] : [
+            {x: dates, y: total, type: 'bar', name: '总任务', marker: {color: '#5B8DB8'}},
+            {x: dates, y: completed, type: 'bar', name: '已完成', marker: {color: '#68A357'}}
+        ];
+        Plotly.newPlot('taskTrendChart', traces, chartLayout, plotlyConfig);
+    }
+
+    function buildElderStatusChart(statuses) {
+        const statusMap = {active: '在院', leave: '请假', discharged: '出院'};
+        const labels = (statuses || []).map(s => statusMap[s.status] || s.status);
+        const values = (statuses || []).map(s => s.count);
+        const colors = {active: '#68A357', leave: '#E5A954', discharged: '#9B938A'};
+        const pieColors = (statuses || []).map(s => colors[s.status] || '#5B8DB8');
+        if (!labels.length) { showNoData('elderStatusChart'); return; }
+        var chartLayout = ChartUtils ? ChartUtils.getBaseLayout({title: '老人入住状态', height: 280}) : {...layout, showlegend: true, legend: {orientation: 'h', y: -0.1}};
+        var trace = ChartUtils ? ChartUtils.makePieTrace({labels: labels, values: values, colors: pieColors}) : {labels: labels, values: values, type: 'pie', hole: 0.4, marker: {colors: pieColors}, textinfo: 'label+percent', textposition: 'outside', hoverinfo: 'label+value+percent'};
+        Plotly.newPlot('elderStatusChart', [trace], chartLayout, plotlyConfig);
+    }
+
+    function buildCaregiverWorkloadChart(workload) {
+        const names = (workload || []).map(w => w.name);
+        const taskCounts = (workload || []).map(w => w.completed_count || 0);
+        const recordCounts = (workload || []).map(w => w.record_count || 0);
+        if (!names.length) { showNoData('caregiverWorkloadChart'); return; }
+        var chartLayout = ChartUtils ? ChartUtils.getBaseLayout({title: '护工工作量统计', xTitle: '数量', height: 280, barmode: 'group'}) : {...layout, barmode: 'group', xaxis: {title: '数量', dtick: 1}, yaxis: {}, legend: {orientation: 'h', y: 1.1}};
+        if (chartLayout.xaxis) chartLayout.xaxis.dtick = 1;
+        var traces = ChartUtils ? [
+            ChartUtils.makeBarTrace({y: names, x: taskCounts, name: '完成任务', color: '#5B8DB8', orientation: 'h', showText: true}),
+            ChartUtils.makeBarTrace({y: names, x: recordCounts, name: '护理记录', color: '#68A357', orientation: 'h', showText: true})
+        ] : [
+            {y: names, x: taskCounts, type: 'bar', orientation: 'h', name: '完成任务', marker: {color: '#5B8DB8'}, text: taskCounts, textposition: 'auto'},
+            {y: names, x: recordCounts, type: 'bar', orientation: 'h', name: '护理记录', marker: {color: '#68A357'}, text: recordCounts, textposition: 'auto'}
+        ];
+        Plotly.newPlot('caregiverWorkloadChart', traces, chartLayout, plotlyConfig);
+    }
+
+    function buildDiseaseChart(diseases) {
+        const labels = (diseases || []).map(d => d.name);
+        const values = (diseases || []).map(d => d.count);
+        const colors = ChartUtils ? ChartUtils.PALETTE : ['#C96161', '#E5A954', '#5B8DB8', '#8B7DB8', '#57A3A3', '#4A4540', '#68A357', '#9B938A', '#D4A574', '#C97B8B'];
+        if (!labels.length) { showNoData('diseaseChart'); return; }
+        var chartLayout = ChartUtils ? ChartUtils.getBaseLayout({title: '全院基础病占比', height: 280}) : {...layout, showlegend: true, legend: {orientation: 'h', y: -0.15}};
+        var trace = ChartUtils ? ChartUtils.makePieTrace({labels: labels, values: values, colors: colors.slice(0, labels.length)}) : {labels: labels, values: values, type: 'pie', hole: 0.4, marker: {colors: colors.slice(0, labels.length)}, textinfo: 'label+percent', textposition: 'outside', hoverinfo: 'label+value+percent'};
+        Plotly.newPlot('diseaseChart', [trace], chartLayout, plotlyConfig);
+    }
+
+    function buildFloorHealthChart(floors) {
+        const labels = (floors || []).map(f => f.floor_name + '楼');
+        const totals = (floors || []).map(f => f.total_elders);
+        const measured = (floors || []).map(f => f.measured_count);
+        if (!labels.length) { showNoData('floorHealthChart'); return; }
+        var chartLayout = ChartUtils ? ChartUtils.getBaseLayout({title: '楼层健康统计', yTitle: '人数', height: 280, barmode: 'stack'}) : {...layout, barmode: 'stack', yaxis: {title: '数量', dtick: 1}, xaxis: {}};
+        if (chartLayout.yaxis) chartLayout.yaxis.dtick = 1;
+        var traces = ChartUtils ? [
+            ChartUtils.makeBarTrace({x: labels, y: totals, name: '老人总数', color: '#5B8DB8', showText: true}),
+            ChartUtils.makeBarTrace({x: labels, y: measured, name: '已体检', color: '#68A357', showText: true})
+        ] : [
+            {x: labels, y: totals, type: 'bar', name: '老人总数', marker: {color: '#5B8DB8'}},
+            {x: labels, y: measured, type: 'bar', name: '已体检', marker: {color: '#68A357'}}
+        ];
+        Plotly.newPlot('floorHealthChart', traces, chartLayout, plotlyConfig);
+    }
+
+    function buildResponseTimeChart(stats) {
+        const names = (stats || []).map(s => s.caregiver_name || '未知');
+        const avgTimes = (stats || []).map(s => s.avg_response_minutes ? Math.round(s.avg_response_minutes) : 0);
+        if (!names.length) { showNoData('responseTimeChart'); return; }
+        const colors = (stats || []).map(s => {
+            const t = s.avg_response_minutes;
+            if (!t) return '#9B938A';
+            if (t < 5) return '#68A357';
+            if (t < 15) return '#E5A954';
+            return '#C96161';
+        });
+        Plotly.newPlot('responseTimeChart', [{
+            x: names, y: avgTimes, type: 'bar',
+            marker: {color: colors},
+            text: avgTimes.map(t => t + '分钟'),
+            textposition: 'auto'
+        }], {...layout, yaxis: {title: '平均响应时长（分钟）', gridcolor: '#eee'}, xaxis: {title: '护工', gridcolor: '#eee'}}, plotlyConfig);
+    }
+
+    function buildResponseTimeTable(stats) {
+        const tbody = document.getElementById('responseTimeTableBody');
+        if (!stats || stats.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><i class="bi bi-inbox"></i> 暂无响应数据</td></tr>';
+            return;
+        }
+        tbody.innerHTML = stats.map(s => {
+            const avg = s.avg_response_minutes ? Math.round(s.avg_response_minutes) : '-';
+            const min = s.min_response_minutes ? Math.round(s.min_response_minutes) : '-';
+            const max = s.max_response_minutes ? Math.round(s.max_response_minutes) : '-';
+            let badgeClass = 'bg-secondary';
+            if (s.avg_response_minutes) {
+                if (s.avg_response_minutes < 5) badgeClass = 'bg-success';
+                else if (s.avg_response_minutes < 15) badgeClass = 'bg-warning text-dark';
+                else badgeClass = 'bg-danger';
+            }
+            return '<tr><td>' + (s.caregiver_name || '未知') + '</td><td><span class="badge bg-info">' + (s.total_alarms || 0) + '</span></td><td><span class="badge ' + badgeClass + '">' + avg + '分钟</span></td><td>' + min + '分钟</td><td>' + max + '分钟</td></tr>';
+        }).join('');
+    }
+
+    function downloadChart(chartId) {
+        Plotly.downloadImage(chartId, {
+            format: 'png',
+            filename: chartId + '_' + new Date().toISOString().slice(0, 10),
+            width: 1200,
+            height: 600,
+            scale: 2
+        });
+    }
+
+    function exportExcel() {
+        if (!reportsData) {
+            showToast('暂无数据可导出', 'warning');
+            return;
+        }
+
+        if (typeof XLSX === 'undefined') {
+            showToast('Excel导出库加载失败，请刷新重试', 'danger');
+            return;
+        }
+
+        var wb = XLSX.utils.book_new();
+
+        var overviewData = [
+            ['指标', '数值'],
+            ['任务完成率', (reportsData.task_stats ? reportsData.task_stats.rate : 0) + '%'],
+            ['已完成任务', reportsData.task_stats ? reportsData.task_stats.completed : 0],
+            ['总任务数', reportsData.task_stats ? reportsData.task_stats.total : 0],
+            ['报警响应及时率', (reportsData.alarm_response_rate || 0) + '%'],
+            ['平均体温', reportsData.health_stats && reportsData.health_stats.avg_temperature ? reportsData.health_stats.avg_temperature + '\u00B0C' : '-'],
+            ['平均心率', reportsData.health_stats && reportsData.health_stats.avg_heart_rate ? reportsData.health_stats.avg_heart_rate + ' bpm' : '-'],
+            ['平均收缩压', reportsData.health_stats && reportsData.health_stats.avg_systolic ? reportsData.health_stats.avg_systolic + ' mmHg' : '-'],
+            ['平均舒张压', reportsData.health_stats && reportsData.health_stats.avg_diastolic ? reportsData.health_stats.avg_diastolic + ' mmHg' : '-']
+        ];
+        var ws1 = XLSX.utils.aoa_to_sheet(overviewData);
+        ws1['!cols'] = [{wch: 20}, {wch: 20}];
+        XLSX.utils.book_append_sheet(wb, ws1, '概览统计');
+
+        if (reportsData.alarm_trend && reportsData.alarm_trend.length > 0) {
+            var alarmTrendData = [['日期', '报警数']];
+            reportsData.alarm_trend.forEach(function(t) { alarmTrendData.push([t.day, t.count]); });
+            var ws2 = XLSX.utils.aoa_to_sheet(alarmTrendData);
+            XLSX.utils.book_append_sheet(wb, ws2, '报警趋势');
+        }
+
+        if (reportsData.alarm_types && reportsData.alarm_types.length > 0) {
+            var typeMap = {auto_health: '健康异常', manual_incident: '手动上报', other: '其他'};
+            var alarmTypeData = [['报警类型', '数量']];
+            reportsData.alarm_types.forEach(function(t) { alarmTypeData.push([typeMap[t.type] || t.type, t.count]); });
+            var ws3 = XLSX.utils.aoa_to_sheet(alarmTypeData);
+            XLSX.utils.book_append_sheet(wb, ws3, '报警类型分布');
+        }
+
+        if (reportsData.caregiver_workload && reportsData.caregiver_workload.length > 0) {
+            var workloadData = [['护工', '完成任务数', '护理记录数']];
+            reportsData.caregiver_workload.forEach(function(w) { workloadData.push([w.name, w.completed_count || 0, w.record_count || 0]); });
+            var ws4 = XLSX.utils.aoa_to_sheet(workloadData);
+            XLSX.utils.book_append_sheet(wb, ws4, '护工工作量');
+        }
+
+        if (reportsData.response_time_stats && reportsData.response_time_stats.length > 0) {
+            var rtData = [['护工', '处理报警数', '平均响应(分钟)', '最快响应(分钟)', '最慢响应(分钟)']];
+            reportsData.response_time_stats.forEach(function(s) {
+                rtData.push([
+                    s.caregiver_name || '未知',
+                    s.total_alarms || 0,
+                    s.avg_response_minutes ? Math.round(s.avg_response_minutes) : '-',
+                    s.min_response_minutes ? Math.round(s.min_response_minutes) : '-',
+                    s.max_response_minutes ? Math.round(s.max_response_minutes) : '-'
+                ]);
+            });
+            var ws5 = XLSX.utils.aoa_to_sheet(rtData);
+            XLSX.utils.book_append_sheet(wb, ws5, '响应时长统计');
+        }
+
+        if (reportsData.disease_stats && reportsData.disease_stats.length > 0) {
+            var diseaseData = [['疾病名称', '患病人数']];
+            reportsData.disease_stats.forEach(function(d) { diseaseData.push([d.name, d.count]); });
+            var ws6 = XLSX.utils.aoa_to_sheet(diseaseData);
+            XLSX.utils.book_append_sheet(wb, ws6, '基础病占比');
+        }
+
+        if (reportsData.alarm_status && reportsData.alarm_status.length > 0) {
+            var statusMap = {unhandled: '未处理', processing: '处理中', resolved: '已解决'};
+            var statusData = [['状态', '数量']];
+            reportsData.alarm_status.forEach(function(s) { statusData.push([statusMap[s.status] || s.status, s.count]); });
+            var ws7 = XLSX.utils.aoa_to_sheet(statusData);
+            XLSX.utils.book_append_sheet(wb, ws7, '报警状态分布');
+        }
+
+        if (reportsData.floor_health && reportsData.floor_health.length > 0) {
+            var floorData = [['楼层', '老人总数', '已体检数']];
+            reportsData.floor_health.forEach(function(f) { floorData.push([f.floor_name + '楼', f.total_elders, f.measured_count]); });
+            var ws8 = XLSX.utils.aoa_to_sheet(floorData);
+            XLSX.utils.book_append_sheet(wb, ws8, '楼层健康分布');
+        }
+
+        if (reportsData.task_trend && reportsData.task_trend.length > 0) {
+            var taskTrendData = [['日期', '总任务', '已完成']];
+            reportsData.task_trend.forEach(function(t) { taskTrendData.push([t.day, t.total, t.completed]); });
+            var ws9 = XLSX.utils.aoa_to_sheet(taskTrendData);
+            XLSX.utils.book_append_sheet(wb, ws9, '任务趋势');
+        }
+
+        XLSX.writeFile(wb, '养老院统计数据_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+        showToast('Excel导出成功！', 'success');
+    }
+</script>
+{% endblock %}

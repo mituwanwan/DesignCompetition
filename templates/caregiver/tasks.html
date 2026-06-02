@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block title %}护理任务 - 智慧养老院管理系统{% endblock %}
+
+{% block page_title %}护理任务{% endblock %}
+
+{% block sidebar %}
+    <a href="/caregiver"><i class="bi bi-house-door"></i> 工作台</a>
+    <a href="/caregiver/tasks" class="active"><i class="bi bi-calendar-check"></i> 护理任务</a>
+    <a href="/caregiver/health-records"><i class="bi bi-heart-pulse"></i> 健康记录</a>
+    <a href="/caregiver/messages"><i class="bi bi-chat-left-text"></i> 消息沟通</a>
+    <a href="/caregiver/family-messages"><i class="bi bi-chat-heart"></i> 亲情留言</a>
+    <a href="/caregiver/incident-reports"><i class="bi bi-exclamation-triangle"></i> 异常上报</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body py-2">
+                    <div class="row align-items-center">
+                        <div class="col-md-5">
+                            <ul class="nav nav-pills" id="statusTabs">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" data-status="" id="tabAll">
+                                        全部 <span class="badge bg-secondary ms-1" id="badgeAll">0</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" data-status="pending" id="tabPending">
+                                        待处理 <span class="badge bg-warning text-dark ms-1" id="badgePending">0</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" data-status="completed" id="tabCompleted">
+                                        已完成 <span class="badge bg-success ms-1" id="badgeCompleted">0</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-7">
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-5">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                        <input type="text" class="form-control" id="elderKeyword" placeholder="老人姓名/ID搜索">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="date" class="form-control form-control-sm" id="filterDate" placeholder="日期筛选">
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-sm btn-outline-primary w-100" id="searchBtn"><i class="bi bi-funnel"></i> 筛选</button>
+                                </div>
+                                <div class="col-md-2 text-end">
+                                    <span class="text-muted small" id="paginationInfo">第 1 页</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive bg-white p-3 rounded shadow-sm">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>老人信息</th>
+                    <th>任务内容</th>
+                    <th>截止时间</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="tasksTableBody">
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <i class="bi bi-hourglass-split fs-4 d-block mb-2"></i>
+                        正在加载任务列表...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <nav>
+            <ul class="pagination pagination-sm justify-content-center" id="paginationNav"></ul>
+        </nav>
+    </div>
+</div>
+
+<div class="modal fade" id="taskDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-clipboard-check me-2"></i>任务详情</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="taskDetailBody">
+                <div class="text-center py-3">
+                    <i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i>
+                    <p class="text-muted">加载中...</p>
+                </div>
+            </div>
+            <div class="modal-footer" id="taskDetailFooter">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmCompleteModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>确认完成</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <i class="bi bi-question-circle fs-1 text-success d-block mb-3"></i>
+                <p class="mb-1 fw-bold">确认完成此护理任务？</p>
+                <p class="text-muted small mb-0">完成后状态不可撤销</p>
+                <p class="text-muted small" id="confirmTaskInfo"></p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" id="confirmCompleteBtn">
+                    <i class="bi bi-check-lg me-1"></i>确认完成
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentPage = 1;
+    const pageSize = 20;
+    let currentStatus = '';
+    let pendingCompleteId = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        currentStatus = localStorage.getItem('careTaskFilterStatus') || '';
+        activateTab(currentStatus);
+        loadTasks(1);
+        loadStatsSummary();
+
+        document.querySelectorAll('#statusTabs .nav-link').forEach(function(tab) {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                var status = this.dataset.status;
+                currentStatus = status;
+                localStorage.setItem('careTaskFilterStatus', status);
+                activateTab(status);
+                loadTasks(1);
+            });
+        });
+
+        document.getElementById('searchBtn').addEventListener('click', function() {
+            loadTasks(1);
+        });
+
+        document.getElementById('elderKeyword').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') loadTasks(1);
+        });
+
+        document.getElementById('confirmCompleteBtn').addEventListener('click', function() {
+            if (pendingCompleteId) {
+                doCompleteTask(pendingCompleteId);
+            }
+        });
+    });
+
+    function activateTab(status) {
+        document.querySelectorAll('#statusTabs .nav-link').forEach(function(tab) {
+            tab.classList.remove('active');
+            if (tab.dataset.status === status) {
+                tab.classList.add('active');
+            }
+        });
+        if (!status) {
+            document.getElementById('tabAll').classList.add('active');
+        }
+    }
+
+    function loadStatsSummary() {
+        LoadingUtils.safeFetch('/api/v1/care-tasks/stats-summary')
+            .then(function(data) {
+                if (data.code === 200) {
+                    var d = data.data;
+                    document.getElementById('badgeAll').textContent = d.total || 0;
+                    document.getElementById('badgePending').textContent = d.pending_count || 0;
+                    document.getElementById('badgeCompleted').textContent = d.completed_count || 0;
+                }
+            })
+            .catch(function() {});
+    }
+
+    function loadTasks(page) {
+        currentPage = page;
+        var keyword = document.getElementById('elderKeyword').value.trim();
+
+        var url = '/api/v1/care-tasks?page=' + page + '&page_size=' + pageSize;
+        if (currentStatus) url += '&status=' + encodeURIComponent(currentStatus);
+        if (keyword) url += '&elder_keyword=' + encodeURIComponent(keyword);
+
+        LoadingUtils.safeFetch(url)
+            .then(function(data) {
+                if (data.code === 200) {
+                    renderTasks(data.data.list);
+                    renderPagination(data.data.pagination);
+                } else {
+                    showError('加载失败：' + data.msg);
+                }
+            })
+            .catch(function(err) {
+                var container = document.getElementById('tasksTableBody');
+                LoadingUtils.showError(container, err.message || '加载任务失败，请刷新重试', function() { loadTasks(currentPage); });
+            });
+    }
+
+    function renderTasks(tasks) {
+        var tbody = document.getElementById('tasksTableBody');
+        if (!tasks || tasks.length === 0) {
+            LoadingUtils.showEmpty(tbody, '暂无护理任务');
+            return;
+        }
+        var html = '';
+        tasks.forEach(function(task, index) {
+            var dueTime = formatDateTime(task.due_time);
+            var isOverdue = task.status === 'pending' && new Date(task.due_time) < new Date();
+            var statusBadge = task.status === 'completed'
+                ? '<span class="badge bg-success">已完成</span>'
+                : (isOverdue
+                    ? '<span class="badge bg-danger">已逾期</span>'
+                    : '<span class="badge bg-warning text-dark">待处理</span>');
+
+            var careLevelBadge = '';
+            if (task.elder_care_level === 'special') {
+                careLevelBadge = '<span class="badge bg-danger ms-1">特护</span>';
+            } else if (task.elder_care_level === 'enhanced') {
+                careLevelBadge = '<span class="badge bg-warning text-dark ms-1">加强</span>';
+            }
+
+            var genderText = task.elder_gender === 'male' ? '男' : '女';
+
+            html += '<tr class="' + (isOverdue ? 'table-danger bg-opacity-10' : '') + '">' +
+                '<td class="text-muted small">' + ((currentPage - 1) * pageSize + index + 1) + '</td>' +
+                '<td>' +
+                    '<div><strong>' + task.elder_name + '</strong>' + careLevelBadge + '</div>' +
+                    '<div class="small text-muted">' +
+                        '<i class="bi bi-door-open me-1"></i>' + (task.room_number || '-') + '室' +
+                        '<span class="ms-2">' + genderText + ' · ' + (task.elder_age || '-') + '岁</span>' +
+                    '</div>' +
+                '</td>' +
+                '<td>' +
+                    '<div>' + task.content + '</div>' +
+                    (task.elder_care_level_name ? '<div class="small text-muted">' + task.elder_care_level_name + '</div>' : '') +
+                '</td>' +
+                '<td>' +
+                    '<div class="' + (isOverdue ? 'text-danger fw-bold' : '') + '">' + dueTime + '</div>' +
+                    (isOverdue ? '<div class="small text-danger"><i class="bi bi-exclamation-circle me-1"></i>已逾期</div>' : '') +
+                '</td>' +
+                '<td>' + statusBadge + '</td>' +
+                '<td>' +
+                    '<button class="btn btn-sm btn-outline-info me-1" onclick="viewTask(' + task.id + ')" title="查看详情"><i class="bi bi-eye"></i></button>' +
+                    (task.status === 'pending' ? '<button class="btn btn-sm btn-success" onclick="confirmComplete(' + task.id + ', \'' + escapeHtml(task.content) + '\')" title="确认完成"><i class="bi bi-check-lg me-1"></i>确认完成</button>' : '') +
+                '</td>' +
+            '</tr>';
+        });
+        tbody.innerHTML = html;
+    }
+
+    function renderPagination(p) {
+        document.getElementById('paginationInfo').textContent = '第 ' + p.page + ' 页，共 ' + p.total_pages + ' 页';
+        var html = '';
+        var total = p.total_pages;
+        if (p.page > 1) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page - 1) + '">上一页</a></li>';
+        for (var i = Math.max(1, p.page - 2); i <= Math.min(total, p.page + 2); i++) {
+            html += '<li class="page-item ' + (i === p.page ? 'active' : '') + '"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+        }
+        if (p.page < total) html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (p.page + 1) + '">下一页</a></li>';
+        document.getElementById('paginationNav').innerHTML = html;
+        document.querySelectorAll('#paginationNav .page-link').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                var page = parseInt(this.dataset.page);
+                if (!isNaN(page)) loadTasks(page);
+            });
+        });
+    }
+
+    function viewTask(id) {
+        var body = document.getElementById('taskDetailBody');
+        var footer = document.getElementById('taskDetailFooter');
+        body.innerHTML = '<div class="text-center py-3"><i class="bi bi-hourglass-split fs-1 d-block mb-2 text-muted"></i><p class="text-muted">加载中...</p></div>';
+        footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>';
+        var modal = new bootstrap.Modal(document.getElementById('taskDetailModal'));
+        modal.show();
+
+        LoadingUtils.safeFetch('/api/v1/care-tasks/' + id)
+            .then(function(data) {
+                if (data.code === 200) {
+                    renderTaskDetail(data.data, footer);
+                } else {
+                    body.innerHTML = '<div class="alert alert-danger">' + data.msg + '</div>';
+                }
+            })
+            .catch(function(err) {
+                body.innerHTML = '<div class="alert alert-danger">' + (err.message || '加载任务详情失败') + '</div>';
+            });
+    }
+
+    function renderTaskDetail(t, footer) {
+        var body = document.getElementById('taskDetailBody');
+        var statusBadge = t.status === 'completed'
+            ? '<span class="badge bg-success fs-6">已完成</span>'
+            : '<span class="badge bg-warning text-dark fs-6">待处理</span>';
+
+        var genderText = t.elder_gender === 'male' ? '男' : '女';
+        var careLevelName = t.elder_care_level_name || '标准护理';
+        var careLevelClass = 'bg-secondary';
+        if (t.elder_care_level === 'special') careLevelClass = 'bg-danger';
+        else if (t.elder_care_level === 'enhanced') careLevelClass = 'bg-warning text-dark';
+
+        var isOverdue = t.status === 'pending' && new Date(t.due_time) < new Date();
+
+        body.innerHTML =
+            '<div class="row">' +
+                '<div class="col-md-7">' +
+                    '<div class="card mb-3">' +
+                        '<div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-clipboard-text me-2"></i>任务信息</h6></div>' +
+                        '<div class="card-body">' +
+                            '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                                '<tr><td class="text-muted">任务内容</td><td class="fw-bold">' + escapeHtml(t.content) + '</td></tr>' +
+                                '<tr><td class="text-muted">计划截止</td><td class="' + (isOverdue ? 'text-danger fw-bold' : '') + '">' +
+                                    '<i class="bi bi-clock me-1"></i>' + formatDateTime(t.due_time) +
+                                    (isOverdue ? ' <span class="badge bg-danger">已逾期</span>' : '') +
+                                '</td></tr>' +
+                                '<tr><td class="text-muted">当前状态</td><td>' + statusBadge + '</td></tr>' +
+                                '<tr><td class="text-muted">负责护工</td><td><i class="bi bi-person me-1"></i>' + (t.caregiver_name || '-') + '</td></tr>' +
+                                '<tr><td class="text-muted">创建时间</td><td class="small text-muted">' + formatDateTime(t.created_at) + '</td></tr>' +
+                            '</table></div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="col-md-5">' +
+                    '<div class="card mb-3">' +
+                        '<div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-person-badge me-2"></i>老人信息</h6></div>' +
+                        '<div class="card-body">' +
+                            '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                                '<tr><td class="text-muted">姓名</td><td class="fw-bold">' + (t.elder_name || '-') + '</td></tr>' +
+                                '<tr><td class="text-muted">性别/年龄</td><td>' + genderText + ' · ' + (t.elder_age || '-') + '岁</td></tr>' +
+                                '<tr><td class="text-muted">房间/床位</td><td>' + (t.room_number || '-') + '室 ' + (t.bed_number || '-') + '床</td></tr>' +
+                                '<tr><td class="text-muted">护理等级</td><td><span class="badge ' + careLevelClass + '">' + careLevelName + '</span></td></tr>' +
+                                (t.elder_medical_history ? '<tr><td class="text-muted">病史</td><td class="small">' + escapeHtml(t.elder_medical_history) + '</td></tr>' : '') +
+                            '</table></div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            (t.status === 'completed' ?
+                '<div class="card border-success">' +
+                    '<div class="card-header bg-success text-white"><h6 class="mb-0"><i class="bi bi-check-circle me-2"></i>完成信息</h6></div>' +
+                    '<div class="card-body">' +
+                        '<div class="table-responsive"><table class="table table-borderless mb-0">' +
+                            '<tr><td class="text-muted">完成时间</td><td><i class="bi bi-clock-fill me-1 text-success"></i>' + (t.completed_at ? formatDateTime(t.completed_at) : '-') + '</td></tr>' +
+                            '<tr><td class="text-muted">完成人</td><td><i class="bi bi-person-check me-1 text-success"></i>' + (t.completed_by_name || '-') + '</td></tr>' +
+                        '</table></div>' +
+                    '</div>' +
+                '</div>'
+            : '');
+
+        if (t.status === 'pending') {
+            footer.innerHTML =
+                '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>' +
+                '<button type="button" class="btn btn-success" onclick="confirmCompleteFromDetail(' + t.id + ', \'' + escapeHtml(t.content) + '\')">' +
+                    '<i class="bi bi-check-lg me-1"></i>确认完成</button>';
+        } else {
+            footer.innerHTML = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>';
+        }
+    }
+
+    function confirmComplete(id, taskContent) {
+        pendingCompleteId = id;
+        document.getElementById('confirmTaskInfo').textContent = '任务：' + taskContent;
+        var modal = new bootstrap.Modal(document.getElementById('confirmCompleteModal'));
+        modal.show();
+    }
+
+    function confirmCompleteFromDetail(id, taskContent) {
+        var detailModal = bootstrap.Modal.getInstance(document.getElementById('taskDetailModal'));
+        if (detailModal) detailModal.hide();
+
+        setTimeout(function() {
+            confirmComplete(id, taskContent);
+        }, 300);
+    }
+
+    function doCompleteTask(id) {
+        LoadingUtils.safeFetch('/api/v1/care-tasks/' + id + '/complete', { method: 'PUT' })
+            .then(function(data) {
+                if (data.code === 200) {
+                    var confirmModal = bootstrap.Modal.getInstance(document.getElementById('confirmCompleteModal'));
+                    if (confirmModal) confirmModal.hide();
+
+                    showToast('任务已完成！完成人：' + (data.data.completed_by_name || '当前用户'), 'success');
+                    loadTasks(currentPage);
+                    loadStatsSummary();
+                } else {
+                    showToast(data.msg || '操作失败', 'danger');
+                }
+            })
+            .catch(function(err) {
+                showToast(err.message || '操作失败，请重试', 'danger');
+            });
+    }
+
+    function formatDateTime(dateStr) {
+        if (!dateStr) return '-';
+        var d = new Date(dateStr);
+        return d.toLocaleString('zh-CN', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function showError(msg) {
+        document.getElementById('tasksTableBody').innerHTML =
+            '<tr><td colspan="6" class="text-center text-danger py-4">' + msg + '</td></tr>';
+    }
+</script>
+{% endblock %}
